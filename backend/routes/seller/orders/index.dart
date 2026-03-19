@@ -21,9 +21,11 @@ Future<Response> onRequest(RequestContext context) async {
     parameters: [auth.userId],
   );
 
-  if (sellerRows.isEmpty) {
+  if (sellerRows.length == 0) {
     return Response.json(
-        statusCode: 404, body: {'error': 'Seller profile not found'});
+      statusCode: 404,
+      body: {'error': 'Seller profile not found'},
+    );
   }
 
   final sellerId = (sellerRows.first[0] as num).toInt();
@@ -103,7 +105,7 @@ Future<Response> onRequest(RequestContext context) async {
       'order_id': r[0],
       'buyer_id': r[1],
       'pickup_point_id': r[2],
-      'total_amount': r[3],
+      'total_amount': r[3].toString(),
       'created_at': r[4].toString(),
       'status': r[5],
       'seller_items_count': r[6],

@@ -17,7 +17,7 @@ Future<int> _getOrCreateCartId(PostgresClient db, int userId) async {
     parameters: [userId],
   );
 
-  if (existing.isNotEmpty) {
+  if (existing.length > 0) {
     return existing.first[0] as int;
   }
 
@@ -33,6 +33,13 @@ Future<int> _getOrCreateCartId(PostgresClient db, int userId) async {
   return inserted.first[0] as int;
 }
 
+num _toNum(dynamic v) {
+  if (v == null) return 0;
+  if (v is num) return v;
+  if (v is String) return num.tryParse(v) ?? 0;
+  return 0;
+}
+
 Future<Response> onRequest(RequestContext context) async {
   if (context.request.method != HttpMethod.get) {
     return Response(statusCode: 405);
@@ -43,13 +50,6 @@ Future<Response> onRequest(RequestContext context) async {
 
   final cartId = await _getOrCreateCartId(db, auth.userId);
   final conn = await db.connection;
-
-  num _toNum(dynamic v) {
-    if (v == null) return 0;
-    if (v is num) return v;
-    if (v is String) return num.tryParse(v) ?? 0;
-    return 0;
-  }
 
   final rows = await conn.execute(
     '''
@@ -76,6 +76,7 @@ Future<Response> onRequest(RequestContext context) async {
     JOIN products p ON p.product_id = ci.product_id
     LEFT JOIN list_types lt ON lt.list_type_id = ci.list_type_id
     WHERE ci.cart_id = \$1
+      AND ci.status = 'active'
     ORDER BY ci.added_at DESC, ci.cart_item_id DESC
     ''',
     parameters: [cartId],
@@ -98,24 +99,24 @@ Future<Response> onRequest(RequestContext context) async {
     };
   }).toList();
 
-  // сумма по выбранным
   num total = 0;
   for (final it in items) {
     final selected = it['selected_for_purchase'] == true;
     if (!selected) continue;
+
     final price = (it['price'] as num?) ?? 0;
     final qty = (it['quantity'] as int?) ?? 0;
     total += price * qty;
   }
 
+  final normalizedTotal = double.parse(total.toStringAsFixed(2));
+
   return Response.json(
     body: {
       'cart_id': cartId,
       'user_id': auth.userId,
-      'total_selected_amount': total,
+      'total_selected_amount': normalizedTotal,
       'items': items,
     },
   );
 }
-
-

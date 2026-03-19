@@ -1,9 +1,8 @@
 ﻿import 'dart:convert';
 import 'package:dart_frog/dart_frog.dart';
 
-import 'package:backend/src/core/middleware/auth_roles_mw.dart';
-import 'package:backend/src/db/postgres_pool.dart';
 import 'package:backend/src/core/security/auth_user.dart';
+import 'package:backend/src/db/postgres_pool.dart';
 
 Future<Response> onRequest(RequestContext context, String id) async {
   final auth = context.read<AuthUser>();
@@ -13,23 +12,30 @@ Future<Response> onRequest(RequestContext context, String id) async {
   final cartItemId = int.tryParse(id);
   if (cartItemId == null) {
     return Response.json(
-        statusCode: 400, body: {'error': 'Invalid cart item id'});
+      statusCode: 400,
+      body: {'error': 'Invalid cart item id'},
+    );
   }
 
-  // ownership check: item должен принадлежать корзине пользователя
+  // Разрешаем менять/удалять только active позицию текущего пользователя.
   final owned = await conn.execute(
     '''
     SELECT ci.cart_item_id
     FROM cart_items ci
     JOIN carts c ON c.cart_id = ci.cart_id
-    WHERE ci.cart_item_id = \$1 AND c.user_id = \$2
+    WHERE ci.cart_item_id = \$1
+      AND c.user_id = \$2
+      AND ci.status = 'active'
+    LIMIT 1
     ''',
     parameters: [cartItemId, auth.userId],
   );
 
-  if (owned.isEmpty) {
+  if (owned.length == 0) {
     return Response.json(
-        statusCode: 404, body: {'error': 'Cart item not found'});
+      statusCode: 404,
+      body: {'error': 'Active cart item not found'},
+    );
   }
 
   if (context.request.method == HttpMethod.patch) {
@@ -41,7 +47,6 @@ Future<Response> onRequest(RequestContext context, String id) async {
     final params = <Object?>[];
 
     void addSet(String col, Object? value) {
-      if (value == null) return;
       sets.add('$col = \$${params.length + 1}');
       params.add(value);
     }
@@ -50,7 +55,9 @@ Future<Response> onRequest(RequestContext context, String id) async {
       final q = int.tryParse(data['quantity']?.toString() ?? '');
       if (q == null || q <= 0) {
         return Response.json(
-            statusCode: 400, body: {'error': 'quantity must be > 0'});
+          statusCode: 400,
+          body: {'error': 'quantity must be > 0'},
+        );
       }
       addSet('quantity', q);
     }
@@ -67,13 +74,19 @@ Future<Response> onRequest(RequestContext context, String id) async {
       addSet('list_type_id', lt);
     }
 
+    // Не даём клиенту менять status вручную у cart item.
     if (data.containsKey('status')) {
-      addSet('status', data['status']?.toString());
+      return Response.json(
+        statusCode: 400,
+        body: {'error': 'status cannot be changed manually'},
+      );
     }
 
     if (sets.isEmpty) {
       return Response.json(
-          statusCode: 400, body: {'error': 'No fields to update'});
+        statusCode: 400,
+        body: {'error': 'No fields to update'},
+      );
     }
 
     final updateParams = [...params, cartItemId];
@@ -84,6 +97,7 @@ Future<Response> onRequest(RequestContext context, String id) async {
       UPDATE cart_items
       SET ${sets.join(', ')}
       WHERE cart_item_id = \$$idPos
+        AND status = 'active'
       ''',
       parameters: updateParams,
     );
@@ -92,10 +106,17 @@ Future<Response> onRequest(RequestContext context, String id) async {
   }
 
   if (context.request.method == HttpMethod.delete) {
+    // Для active item можно удалить физически.
+    // ordered item сюда уже не пройдёт по ownership check выше.
     await conn.execute(
-      'DELETE FROM cart_items WHERE cart_item_id = \$1',
+      '''
+      DELETE FROM cart_items
+      WHERE cart_item_id = \$1
+        AND status = 'active'
+      ''',
       parameters: [cartItemId],
     );
+
     return Response.json(body: {'ok': true});
   }
 

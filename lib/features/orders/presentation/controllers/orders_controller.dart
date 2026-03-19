@@ -36,7 +36,14 @@ class OrdersController extends Cubit<OrdersState> {
   }
 
   Future<void> loadOrderDetails(int orderId) async {
-    emit(state.copyWith(status: OrdersStatus.loading, clearError: true));
+    emit(
+      state.copyWith(
+        status: OrdersStatus.loading,
+        selectedOrder: null,
+        orderItems: const [],
+        clearError: true,
+      ),
+    );
 
     try {
       final result = await _getOrderDetailsUseCase(orderId);

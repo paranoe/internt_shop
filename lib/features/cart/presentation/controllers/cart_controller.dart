@@ -6,7 +6,7 @@ import 'package:diplomeprojectmobile/features/cart/domain/usecases/add_cart_item
 import 'package:diplomeprojectmobile/features/cart/domain/usecases/delete_cart_item_usecase.dart';
 import 'package:diplomeprojectmobile/features/cart/domain/usecases/get_cart_usecase.dart';
 import 'package:diplomeprojectmobile/features/cart/domain/usecases/update_cart_item_usecase.dart';
-import 'cart_state.dart';
+import 'package:diplomeprojectmobile/features/cart/presentation/controllers/cart_state.dart';
 
 class CartController extends Cubit<CartState> {
   CartController({required CartApi cartApi})
@@ -22,19 +22,10 @@ class CartController extends Cubit<CartState> {
   final DeleteCartItemUseCase _deleteCartItem;
 
   Future<void> loadCart() async {
-    print('LOAD CART START');
     emit(state.copyWith(status: CartStatus.loading, clearError: true));
 
     try {
       final cart = await _getCart();
-      print(
-        'LOAD CART SUCCESS: cartId=${cart.cartId}, items=${cart.items.length}',
-      );
-      for (final item in cart.items) {
-        print(
-          'ITEM => id=${item.cartItemId}, product=${item.productName}, qty=${item.quantity}',
-        );
-      }
 
       emit(
         state.copyWith(
@@ -43,9 +34,7 @@ class CartController extends Cubit<CartState> {
           clearError: true,
         ),
       );
-    } catch (e, st) {
-      print('LOAD CART ERROR: $e');
-      print(st);
+    } catch (e) {
       emit(
         state.copyWith(status: CartStatus.error, errorMessage: e.toString()),
       );
@@ -53,41 +42,63 @@ class CartController extends Cubit<CartState> {
   }
 
   Future<void> addItem({required int productId, int quantity = 1}) async {
-    print('ADD ITEM START: productId=$productId, quantity=$quantity');
-
     try {
       await _addCartItem(productId: productId, quantity: quantity);
-      print('ADD ITEM SUCCESS');
       await loadCart();
-    } catch (e, st) {
-      print('ADD ITEM ERROR: $e');
-      print(st);
+    } catch (e) {
+      emit(
+        state.copyWith(status: CartStatus.error, errorMessage: e.toString()),
+      );
       rethrow;
     }
   }
 
   Future<void> increaseQty(int cartItemId, int currentQty) async {
-    await _updateCartItem(cartItemId: cartItemId, quantity: currentQty + 1);
-    await loadCart();
+    try {
+      await _updateCartItem(cartItemId: cartItemId, quantity: currentQty + 1);
+      await loadCart();
+    } catch (e) {
+      emit(
+        state.copyWith(status: CartStatus.error, errorMessage: e.toString()),
+      );
+    }
   }
 
   Future<void> decreaseQty(int cartItemId, int currentQty) async {
-    if (currentQty <= 1) {
-      await deleteItem(cartItemId);
-      return;
-    }
+    try {
+      if (currentQty <= 1) {
+        await deleteItem(cartItemId);
+        return;
+      }
 
-    await _updateCartItem(cartItemId: cartItemId, quantity: currentQty - 1);
-    await loadCart();
+      await _updateCartItem(cartItemId: cartItemId, quantity: currentQty - 1);
+      await loadCart();
+    } catch (e) {
+      emit(
+        state.copyWith(status: CartStatus.error, errorMessage: e.toString()),
+      );
+    }
   }
 
   Future<void> toggleSelected(int cartItemId, bool value) async {
-    await _updateCartItem(cartItemId: cartItemId, selectedForPurchase: value);
-    await loadCart();
+    try {
+      await _updateCartItem(cartItemId: cartItemId, selectedForPurchase: value);
+      await loadCart();
+    } catch (e) {
+      emit(
+        state.copyWith(status: CartStatus.error, errorMessage: e.toString()),
+      );
+    }
   }
 
   Future<void> deleteItem(int cartItemId) async {
-    await _deleteCartItem(cartItemId: cartItemId);
-    await loadCart();
+    try {
+      await _deleteCartItem(cartItemId: cartItemId);
+      await loadCart();
+    } catch (e) {
+      emit(
+        state.copyWith(status: CartStatus.error, errorMessage: e.toString()),
+      );
+    }
   }
 }

@@ -14,6 +14,7 @@ class AppRoutes {
   static const buyerCheckout = '/buyer/checkout';
   static const buyerOrderSuccess = '/buyer/order-success';
   static const buyerOrderDetails = '/buyer/order-details';
+  static const editProfile = '/buyer/profile/edit';
 
   static const sellerDashboard = '/seller/dashboard';
   static const adminDashboard = '/admin/dashboard';

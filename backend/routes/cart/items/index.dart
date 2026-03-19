@@ -1,9 +1,8 @@
 ﻿import 'dart:convert';
 import 'package:dart_frog/dart_frog.dart';
 
-import 'package:backend/src/core/middleware/auth_roles_mw.dart';
-import 'package:backend/src/db/postgres_pool.dart';
 import 'package:backend/src/core/security/auth_user.dart';
+import 'package:backend/src/db/postgres_pool.dart';
 
 Future<int> _getOrCreateCartId(PostgresClient db, int userId) async {
   final conn = await db.connection;
@@ -19,7 +18,9 @@ Future<int> _getOrCreateCartId(PostgresClient db, int userId) async {
     parameters: [userId],
   );
 
-  if (existing.isNotEmpty) return existing.first[0] as int;
+  if (existing.length > 0) {
+    return existing.first[0] as int;
+  }
 
   final inserted = await conn.execute(
     '''
@@ -49,6 +50,7 @@ Future<Response> onRequest(RequestContext context) async {
   int? listTypeId = data['list_type_id'] == null
       ? null
       : int.tryParse(data['list_type_id'].toString());
+
   final selected = data['selected_for_purchase'] == null
       ? true
       : (data['selected_for_purchase'] == true);
@@ -62,24 +64,36 @@ Future<Response> onRequest(RequestContext context) async {
 
   final cartId = await _getOrCreateCartId(db, auth.userId);
   final conn = await db.connection;
+
   final productRows = await conn.execute(
-    'SELECT 1 FROM products WHERE product_id = \$1 LIMIT 1',
+    '''
+    SELECT 1
+    FROM products
+    WHERE product_id = \$1
+    LIMIT 1
+    ''',
     parameters: [productId],
   );
-  if (productRows.isEmpty) {
-    return Response.json(statusCode: 404, body: {'error': 'Product not found'});
+
+  if (productRows.length == 0) {
+    return Response.json(
+      statusCode: 404,
+      body: {'error': 'Product not found'},
+    );
   }
-  if (productRows.isEmpty) {
-    return Response.json(statusCode: 404, body: {'error': 'Product not found'});
-  }
-  // если list_type_id не передан — берем id типа "cart"
+
   if (listTypeId == null) {
     final lt = await conn.execute(
-      'SELECT list_type_id FROM list_types WHERE list_type_name = \$1 LIMIT 1',
+      '''
+      SELECT list_type_id
+      FROM list_types
+      WHERE list_type_name = \$1
+      LIMIT 1
+      ''',
       parameters: ['cart'],
     );
 
-    if (lt.isEmpty) {
+    if (lt.length == 0) {
       return Response.json(
         statusCode: 500,
         body: {'error': 'list_types missing: cart'},
@@ -88,19 +102,23 @@ Future<Response> onRequest(RequestContext context) async {
 
     listTypeId = lt.first[0] as int;
   }
-  // если товар уже есть в этой корзине (в рамках одного list_type) — увеличиваем quantity
+
+  // Ищем только активную позицию в корзине.
+  // ordered / removed / wishlist и т.п. не должны переиспользоваться.
   final existing = await conn.execute(
     '''
-  SELECT cart_item_id, quantity
-  FROM cart_items
-  WHERE cart_id = \$1 AND product_id = \$2
-    AND (list_type_id = \$3::int OR (list_type_id IS NULL AND \$3::int IS NULL))
-  LIMIT 1
-  ''',
+    SELECT cart_item_id, quantity
+    FROM cart_items
+    WHERE cart_id = \$1
+      AND product_id = \$2
+      AND list_type_id = \$3
+      AND status = 'active'
+    LIMIT 1
+    ''',
     parameters: [cartId, productId, listTypeId],
   );
 
-  if (existing.isNotEmpty) {
+  if (existing.length > 0) {
     final cartItemId = existing.first[0] as int;
     final oldQty = existing.first[1] as int;
     final newQty = oldQty + quantity;
@@ -116,14 +134,23 @@ Future<Response> onRequest(RequestContext context) async {
     );
 
     return Response.json(
-        body: {'cart_item_id': cartItemId, 'quantity': newQty});
+      body: {
+        'cart_item_id': cartItemId,
+        'quantity': newQty,
+      },
+    );
   }
 
   final inserted = await conn.execute(
     '''
     INSERT INTO cart_items (
-      cart_id, product_id, quantity, added_at,
-      selected_for_purchase, list_type_id, status
+      cart_id,
+      product_id,
+      quantity,
+      added_at,
+      selected_for_purchase,
+      list_type_id,
+      status
     )
     VALUES (\$1, \$2, \$3, now(), \$4, \$5, 'active')
     RETURNING cart_item_id
@@ -132,7 +159,7 @@ Future<Response> onRequest(RequestContext context) async {
   );
 
   return Response.json(
-      statusCode: 201, body: {'cart_item_id': inserted.first[0]});
+    statusCode: 201,
+    body: {'cart_item_id': inserted.first[0]},
+  );
 }
-
-

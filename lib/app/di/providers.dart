@@ -15,6 +15,12 @@ import 'package:diplomeprojectmobile/features/checkout/data/datasources/checkout
 import 'package:diplomeprojectmobile/features/checkout/presentation/controllers/checkout_controller.dart';
 import 'package:diplomeprojectmobile/features/orders/data/datasources/orders_api.dart';
 import 'package:diplomeprojectmobile/features/orders/presentation/controllers/orders_controller.dart';
+import 'package:diplomeprojectmobile/features/profile/data/datasources/profile_api.dart';
+import 'package:diplomeprojectmobile/features/profile/presentation/controllers/profile_controller.dart';
+import 'package:diplomeprojectmobile/features/seller/data/datasources/seller_api.dart';
+import 'package:diplomeprojectmobile/features/seller/presentation/controllers/seller_controller.dart';
+import 'package:diplomeprojectmobile/features/seller/data/datasources/seller_api.dart';
+import 'package:diplomeprojectmobile/features/seller/presentation/controllers/seller_controller.dart';
 
 class AppProviders {
   AppProviders._();
@@ -67,6 +73,28 @@ class AppProviders {
     BlocProvider<OrdersController>(
       create: (context) =>
           OrdersController(ordersApi: context.read<OrdersApi>()),
+    ),
+    RepositoryProvider<ProfileApi>(
+      create: (context) => ProfileApi(context.read<DioClient>()),
+    ),
+    BlocProvider<ProfileController>(
+      create: (context) =>
+          ProfileController(profileApi: context.read<ProfileApi>()),
+    ),
+    RepositoryProvider<SellerApi>(
+      create: (context) => SellerApi(context.read<DioClient>()),
+    ),
+    BlocProvider<SellerController>(
+      create: (context) =>
+          SellerController(sellerApi: context.read<SellerApi>())
+            ..loadProducts(),
+    ),
+    RepositoryProvider<SellerApi>(
+      create: (context) => SellerApi(context.read<DioClient>()),
+    ),
+    BlocProvider<SellerController>(
+      create: (context) =>
+          SellerController(sellerApi: context.read<SellerApi>())..loadAll(),
     ),
   ];
 }

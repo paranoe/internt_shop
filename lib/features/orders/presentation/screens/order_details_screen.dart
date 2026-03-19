@@ -21,9 +21,29 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     });
   }
 
+  Color _statusColor(String status) {
+    final value = status.trim().toLowerCase();
+
+    if (value.contains('new') || value.contains('нов')) {
+      return Colors.blue;
+    }
+    if (value.contains('paid') || value.contains('оплач')) {
+      return Colors.green;
+    }
+    if (value.contains('cancel') || value.contains('отмен')) {
+      return Colors.red;
+    }
+    if (value.contains('deliver') || value.contains('достав')) {
+      return Colors.orange;
+    }
+
+    return Colors.grey;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FB),
       appBar: AppBar(title: Text('Заказ #${widget.orderId}')),
       body: BlocBuilder<OrdersController, OrdersState>(
         builder: (context, state) {
@@ -32,7 +52,8 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (state.status == OrdersStatus.error) {
+          if (state.status == OrdersStatus.error &&
+              state.selectedOrder == null) {
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
@@ -49,46 +70,96 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             return const Center(child: Text('Не удалось загрузить заказ'));
           }
 
+          final statusColor = _statusColor(order.status);
+
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Заказ #${order.orderId}',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 12,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Заказ #${order.orderId}',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        order.status,
+                        style: TextStyle(
+                          color: statusColor,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Text('Статус: ${order.status}'),
-                      Text('Сумма: ${order.totalAmount}'),
-                      Text('ПВЗ: ${order.pickupPointId}'),
-                      Text('Дата: ${order.createdAt}'),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text('Сумма: ${order.totalAmount}'),
+                    Text('ПВЗ: ${order.pickupPointId}'),
+                    Text('Дата: ${order.createdAt}'),
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               const Text(
                 'Товары',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               ...state.orderItems.map(
-                (item) => Card(
+                (item) => Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
                   child: ListTile(
-                    title: Text(item.productName),
-                    subtitle: Text(
-                      'Количество: ${item.quantity}\n'
-                      'Цена: ${item.priceSnapshot} ${item.currency}',
+                    contentPadding: const EdgeInsets.all(16),
+                    title: Text(
+                      item.productName,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
-                    trailing: Text(item.lineTotal),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        'Количество: ${item.quantity}\n'
+                        'Цена: ${item.priceSnapshot} ${item.currency}',
+                      ),
+                    ),
+                    trailing: Text(
+                      item.lineTotal,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
                   ),
                 ),
               ),

@@ -20,8 +20,8 @@ import 'package:diplomeprojectmobile/features/seller/presentation/screens/seller
 import 'package:diplomeprojectmobile/features/catalog/presentation/screens/product_list_screen.dart';
 import 'package:diplomeprojectmobile/features/product/presentation/screens/product_details_screen.dart';
 import 'package:diplomeprojectmobile/features/checkout/presentation/screens/checkout_screen.dart';
-import 'package:diplomeprojectmobile/features/checkout/presentation/screens/order_success_screen.dart';
 import 'package:diplomeprojectmobile/features/orders/presentation/screens/order_details_screen.dart';
+import 'package:diplomeprojectmobile/features/profile/presentation/screens/edit_profile_screen.dart';
 
 class AppRouter {
   AppRouter._();
@@ -113,19 +113,15 @@ class AppRouter {
           builder: (context, state) => const CheckoutScreen(),
         ),
         GoRoute(
-          path: AppRoutes.buyerOrderSuccess,
-          builder: (context, state) {
-            final orderId =
-                int.tryParse(state.uri.queryParameters['order_id'] ?? '') ?? 0;
-            return OrderSuccessScreen(orderId: orderId);
-          },
-        ),
-        GoRoute(
           path: AppRoutes.buyerOrderDetails,
           builder: (context, state) {
             final id = int.tryParse(state.uri.queryParameters['id'] ?? '') ?? 0;
             return OrderDetailsScreen(orderId: id);
           },
+        ),
+        GoRoute(
+          path: AppRoutes.editProfile,
+          builder: (context, state) => const EditProfileScreen(),
         ),
       ],
     );

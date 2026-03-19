@@ -1,24 +1,23 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../data/datasources/checkout_api.dart';
-import '../../data/repos/checkout_repo_impl.dart';
-import '../../domain/entities/city.dart';
-import '../../domain/entities/payment_method.dart';
-import '../../domain/entities/pickup_point.dart';
-import '../../domain/entities/user_card.dart';
-import '../../domain/usecases/add_user_card_usecase.dart';
-import '../../domain/usecases/create_order_usecase.dart';
-import '../../domain/usecases/delete_user_card_usecase.dart';
-import '../../domain/usecases/get_cities_usecase.dart';
-import '../../domain/usecases/get_payment_methods_usecase.dart';
-import '../../domain/usecases/get_pickup_points_usecase.dart';
-import '../../domain/usecases/get_user_cards_usecase.dart';
-import '../../domain/usecases/preview_checkout_usecase.dart';
-import 'checkout_state.dart';
+import 'package:diplomeprojectmobile/features/checkout/data/datasources/checkout_api.dart';
+import 'package:diplomeprojectmobile/features/checkout/data/repos/checkout_repo_impl.dart';
+import 'package:diplomeprojectmobile/features/checkout/domain/entities/payment_method.dart';
+import 'package:diplomeprojectmobile/features/checkout/domain/entities/pickup_point.dart';
+import 'package:diplomeprojectmobile/features/checkout/domain/entities/user_card.dart';
+import 'package:diplomeprojectmobile/features/checkout/domain/usecases/add_user_card_usecase.dart';
+import 'package:diplomeprojectmobile/features/checkout/domain/usecases/delete_user_card_usecase.dart';
+import 'package:diplomeprojectmobile/features/checkout/domain/usecases/get_cities_usecase.dart';
+import 'package:diplomeprojectmobile/features/checkout/domain/usecases/get_payment_methods_usecase.dart';
+import 'package:diplomeprojectmobile/features/checkout/domain/usecases/get_pickup_points_usecase.dart';
+import 'package:diplomeprojectmobile/features/checkout/domain/usecases/get_user_cards_usecase.dart';
+import 'package:diplomeprojectmobile/features/checkout/domain/usecases/preview_checkout_usecase.dart';
+import 'package:diplomeprojectmobile/features/checkout/presentation/controllers/checkout_state.dart';
 
 class CheckoutController extends Cubit<CheckoutState> {
   CheckoutController({required CheckoutApi checkoutApi})
-    : _previewUseCase = PreviewCheckoutUseCase(CheckoutRepoImpl(checkoutApi)),
+    : _checkoutApi = checkoutApi,
+      _previewUseCase = PreviewCheckoutUseCase(CheckoutRepoImpl(checkoutApi)),
       _getCitiesUseCase = GetCitiesUseCase(CheckoutRepoImpl(checkoutApi)),
       _getPickupPointsUseCase = GetPickupPointsUseCase(
         CheckoutRepoImpl(checkoutApi),
@@ -31,9 +30,9 @@ class CheckoutController extends Cubit<CheckoutState> {
       _deleteUserCardUseCase = DeleteUserCardUseCase(
         CheckoutRepoImpl(checkoutApi),
       ),
-      _createOrderUseCase = CreateOrderUseCase(CheckoutRepoImpl(checkoutApi)),
       super(const CheckoutState());
 
+  final CheckoutApi _checkoutApi;
   final PreviewCheckoutUseCase _previewUseCase;
   final GetCitiesUseCase _getCitiesUseCase;
   final GetPickupPointsUseCase _getPickupPointsUseCase;
@@ -41,7 +40,6 @@ class CheckoutController extends Cubit<CheckoutState> {
   final GetUserCardsUseCase _getUserCardsUseCase;
   final AddUserCardUseCase _addUserCardUseCase;
   final DeleteUserCardUseCase _deleteUserCardUseCase;
-  final CreateOrderUseCase _createOrderUseCase;
 
   Future<void> load() async {
     emit(state.copyWith(status: CheckoutStatus.loading, clearError: true));
@@ -89,6 +87,7 @@ class CheckoutController extends Cubit<CheckoutState> {
           pickupPoints: points,
           selectedCity: selectedCity,
           selectedPickupPoint: points.isNotEmpty ? points.first : null,
+          clearError: true,
         ),
       );
     } catch (e) {
@@ -97,54 +96,84 @@ class CheckoutController extends Cubit<CheckoutState> {
   }
 
   void selectPaymentMethod(PaymentMethod method) {
-    emit(state.copyWith(selectedPaymentMethod: method));
+    emit(state.copyWith(selectedPaymentMethod: method, clearError: true));
   }
 
   void selectPickupPoint(PickupPoint point) {
-    emit(state.copyWith(selectedPickupPoint: point));
+    emit(state.copyWith(selectedPickupPoint: point, clearError: true));
   }
 
   void selectCard(UserCardEntity card) {
-    emit(state.copyWith(selectedCard: card));
+    emit(state.copyWith(selectedCard: card, clearError: true));
   }
 
-  Future<void> addCard(String cardNumber) async {
-    await _addUserCardUseCase(cardNumber: cardNumber);
-    final cards = await _getUserCardsUseCase();
-    emit(
-      state.copyWith(
-        userCards: cards,
-        selectedCard: cards.isNotEmpty ? cards.last : null,
-      ),
-    );
+  Future<bool> addCard(String cardNumber) async {
+    try {
+      await _addUserCardUseCase(cardNumber: cardNumber);
+      final cards = await _getUserCardsUseCase();
+
+      emit(
+        state.copyWith(
+          userCards: cards,
+          selectedCard: cards.isNotEmpty ? cards.last : null,
+          clearError: true,
+        ),
+      );
+
+      return true;
+    } catch (e) {
+      emit(state.copyWith(errorMessage: e.toString()));
+      return false;
+    }
   }
 
   Future<void> deleteCard(int cardId) async {
-    await _deleteUserCardUseCase(cardId);
-    final cards = await _getUserCardsUseCase();
-    emit(
-      state.copyWith(
-        userCards: cards,
-        selectedCard: cards.isNotEmpty ? cards.first : null,
-      ),
-    );
+    try {
+      await _deleteUserCardUseCase(cardId);
+      final cards = await _getUserCardsUseCase();
+
+      UserCardEntity? nextSelected;
+      if (cards.isNotEmpty) {
+        final currentSelectedId = state.selectedCard?.cardId;
+        final stillExists = cards.where((e) => e.cardId == currentSelectedId);
+
+        nextSelected = stillExists.isNotEmpty ? stillExists.first : cards.first;
+      }
+
+      emit(
+        state.copyWith(
+          userCards: cards,
+          selectedCard: nextSelected,
+          clearError: true,
+        ),
+      );
+    } catch (e) {
+      emit(state.copyWith(errorMessage: e.toString()));
+    }
   }
 
   Future<int?> createOrder() async {
     final pickup = state.selectedPickupPoint;
-    if (pickup == null) return null;
+    final paymentMethod = state.selectedPaymentMethod;
+
+    if (pickup == null || paymentMethod == null) {
+      return null;
+    }
 
     emit(state.copyWith(status: CheckoutStatus.submitting, clearError: true));
 
     try {
-      final result = await _createOrderUseCase(
+      final result = await _checkoutApi.createOrder(
         pickupPointId: pickup.pickupPointId,
+        paymentMethodId: paymentMethod.paymentMethodId,
+        cardId: state.selectedCard?.cardId,
       );
 
       emit(
         state.copyWith(
           status: CheckoutStatus.success,
           createdOrderId: result.orderId,
+          clearError: true,
         ),
       );
 

@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:dart_frog/dart_frog.dart';
 import 'package:backend/src/core/security/auth_user.dart';
 import 'package:backend/src/db/postgres_pool.dart';
@@ -10,7 +11,10 @@ Future<Response> onRequest(RequestContext context, String id) async {
 
   final orderId = int.tryParse(id);
   if (orderId == null) {
-    return Response.json(statusCode: 400, body: {'error': 'Invalid order id'});
+    return Response.json(
+      statusCode: 400,
+      body: {'error': 'Invalid order id'},
+    );
   }
 
   final sellerRows = await conn.execute(
@@ -23,9 +27,11 @@ Future<Response> onRequest(RequestContext context, String id) async {
     parameters: [auth.userId],
   );
 
-  if (sellerRows.isEmpty) {
+  if (sellerRows.length == 0) {
     return Response.json(
-        statusCode: 404, body: {'error': 'Seller profile not found'});
+      statusCode: 404,
+      body: {'error': 'Seller profile not found'},
+    );
   }
 
   final sellerId = (sellerRows.first[0] as num).toInt();
@@ -55,8 +61,11 @@ Future<Response> onRequest(RequestContext context, String id) async {
       parameters: [orderId, sellerId],
     );
 
-    if (orderRows.isEmpty) {
-      return Response.json(statusCode: 404, body: {'error': 'Order not found'});
+    if (orderRows.length == 0) {
+      return Response.json(
+        statusCode: 404,
+        body: {'error': 'Order not found'},
+      );
     }
 
     final o = orderRows.first;
@@ -87,8 +96,8 @@ Future<Response> onRequest(RequestContext context, String id) async {
       return {
         'order_item_id': r[0],
         'quantity': r[1],
-        'price_snapshot': r[2],
-        'line_total': r[3],
+        'price_snapshot': r[2].toString(),
+        'line_total': r[3].toString(),
         'source_cart_item_id': r[4],
         'product_id': r[5],
         'product_name': r[6],
@@ -103,7 +112,7 @@ Future<Response> onRequest(RequestContext context, String id) async {
           'order_id': o[0],
           'buyer_id': o[1],
           'pickup_point_id': o[2],
-          'total_amount': o[3],
+          'total_amount': o[3].toString(),
           'created_at': o[4].toString(),
           'status': o[5],
         },
@@ -133,8 +142,11 @@ Future<Response> onRequest(RequestContext context, String id) async {
       parameters: [orderId, sellerId],
     );
 
-    if (existingRows.isEmpty) {
-      return Response.json(statusCode: 404, body: {'error': 'Order not found'});
+    if (existingRows.length == 0) {
+      return Response.json(
+        statusCode: 404,
+        body: {'error': 'Order not found'},
+      );
     }
 
     final currentStatus = existingRows.first[1].toString();
@@ -150,7 +162,9 @@ Future<Response> onRequest(RequestContext context, String id) async {
     if (!allowedSellerStatuses.contains(newStatus)) {
       return Response.json(
         statusCode: 400,
-        body: {'error': 'Seller can only set status to shipped or delivered'},
+        body: {
+          'error': 'Seller can only set status to shipped or delivered',
+        },
       );
     }
 
@@ -163,7 +177,7 @@ Future<Response> onRequest(RequestContext context, String id) async {
         statusCode: 400,
         body: {
           'error':
-              'Invalid status transition. Allowed: paid -> shipped, shipped -> delivered'
+              'Invalid status transition. Allowed: paid -> shipped, shipped -> delivered',
         },
       );
     }

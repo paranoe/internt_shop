@@ -22,9 +22,29 @@ class _OrdersScreenState extends State<OrdersScreen> {
     });
   }
 
+  Color _statusColor(String status) {
+    final value = status.trim().toLowerCase();
+
+    if (value.contains('new') || value.contains('нов')) {
+      return Colors.blue;
+    }
+    if (value.contains('paid') || value.contains('оплач')) {
+      return Colors.green;
+    }
+    if (value.contains('cancel') || value.contains('отмен')) {
+      return Colors.red;
+    }
+    if (value.contains('deliver') || value.contains('достав')) {
+      return Colors.orange;
+    }
+
+    return Colors.grey;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FB),
       appBar: AppBar(title: const Text('Мои заказы')),
       body: BlocBuilder<OrdersController, OrdersState>(
         builder: (context, state) {
@@ -32,7 +52,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (state.status == OrdersStatus.error) {
+          if (state.status == OrdersStatus.error && state.orders.isEmpty) {
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
@@ -45,26 +65,86 @@ class _OrdersScreenState extends State<OrdersScreen> {
           }
 
           if (state.orders.isEmpty) {
-            return const Center(child: Text('Заказов пока нет'));
+            return RefreshIndicator(
+              onRefresh: () => context.read<OrdersController>().loadOrders(),
+              child: ListView(
+                children: const [
+                  SizedBox(height: 140),
+                  Center(
+                    child: Column(
+                      children: [
+                        Icon(Icons.receipt_long_outlined, size: 64),
+                        SizedBox(height: 12),
+                        Text(
+                          'Заказов пока нет',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
           }
 
           return RefreshIndicator(
             onRefresh: () => context.read<OrdersController>().loadOrders(),
             child: ListView.builder(
+              padding: const EdgeInsets.all(16),
               itemCount: state.orders.length,
               itemBuilder: (context, index) {
                 final order = state.orders[index];
+                final statusColor = _statusColor(order.status);
 
-                return Card(
-                  margin: const EdgeInsets.all(12),
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(22),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
                   child: ListTile(
-                    title: Text('Заказ #${order.orderId}'),
-                    subtitle: Text(
-                      'Статус: ${order.status}\n'
-                      'Сумма: ${order.totalAmount}\n'
-                      'Товаров: ${order.itemsCount}',
+                    contentPadding: const EdgeInsets.all(16),
+                    title: Text(
+                      'Заказ #${order.orderId}',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
-                    isThreeLine: true,
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: statusColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            order.status,
+                            style: TextStyle(
+                              color: statusColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Text('Сумма: ${order.totalAmount}'),
+                        Text('Товаров: ${order.itemsCount}'),
+                        Text('Дата: ${order.createdAt}'),
+                      ],
+                    ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () {
                       context.push(

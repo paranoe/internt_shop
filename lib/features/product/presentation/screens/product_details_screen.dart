@@ -48,6 +48,18 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         productId: widget.productId,
         quantity: 1,
       );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Товар добавлен в корзину')));
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось добавить товар в корзину')),
+      );
     } finally {
       if (mounted) {
         setState(() => _isBusy = false);

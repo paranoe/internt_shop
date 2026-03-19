@@ -1,7 +1,6 @@
 import 'package:diplomeprojectmobile/core/network/api_endpoints.dart';
 import 'package:diplomeprojectmobile/core/network/dio_client.dart';
-
-import '../models/cart_model.dart';
+import 'package:diplomeprojectmobile/features/cart/data/models/cart_model.dart';
 
 class CartApi {
   const CartApi(this._dioClient);
@@ -31,7 +30,10 @@ class CartApi {
   }) async {
     final body = <String, dynamic>{};
 
-    if (quantity != null) body['quantity'] = quantity;
+    if (quantity != null) {
+      body['quantity'] = quantity;
+    }
+
     if (selectedForPurchase != null) {
       body['selected_for_purchase'] = selectedForPurchase;
     }
