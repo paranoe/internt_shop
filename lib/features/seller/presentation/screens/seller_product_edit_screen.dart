@@ -26,114 +26,26 @@ class _SellerProductEditScreenState extends State<SellerProductEditScreen> {
   final _imageUrlController = TextEditingController();
   final _sortOrderController = TextEditingController(text: '1');
 
+  final Map<int, TextEditingController> _parameterControllers = {};
+
   bool _isLoading = true;
   bool _isSaving = false;
   bool _isSavingImage = false;
 
   int? _productId;
   int? _selectedCategoryId;
-  String? _selectedGroup;
+  int? _selectedSubcategoryId;
 
-  List<Map<String, dynamic>> _allCategories = [];
-  List<Map<String, dynamic>> _filteredCategories = [];
+  List<Map<String, dynamic>> _categories = [];
+  List<Map<String, dynamic>> _subcategories = [];
+  List<Map<String, dynamic>> _subcategoryParameters = [];
   List<Map<String, dynamic>> _images = [];
-
-  static const Map<String, List<String>> _categoryGroups = {
-    'Электроника': [
-      'Смартфоны',
-      'Ноутбуки',
-      'Планшеты',
-      'Наушники',
-      'Умные часы',
-    ],
-    'Одежда и обувь': [
-      'Женская одежда',
-      'Мужская одежда',
-      'Обувь',
-      'Сумки',
-      'Аксессуары',
-    ],
-    'Красота и уход': [
-      'Уход за лицом',
-      'Уход за телом',
-      'Парфюмерия',
-      'Макияж',
-      'Уход за волосами',
-    ],
-    'Дом и интерьер': ['Мебель', 'Кухня', 'Освещение', 'Текстиль', 'Декор'],
-    'Детские товары': [
-      'Игрушки',
-      'Детская одежда',
-      'Коляски',
-      'Подгузники',
-      'Товары для школы',
-    ],
-    'Спорт и отдых': [
-      'Фитнес',
-      'Велосипеды',
-      'Туризм',
-      'Спортивная одежда',
-      'Тренажёры',
-    ],
-    'Авто': [
-      'Запчасти',
-      'Шины и диски',
-      'Масла и жидкости',
-      'Аксессуары',
-      'Электроника для авто',
-    ],
-  };
-
-  bool get _isEdit => _productId != null;
 
   @override
   void initState() {
     super.initState();
     _fillFromInitial();
     _load();
-  }
-
-  int _categoryId(Map<String, dynamic> item) {
-    return int.tryParse((item['category_id'] ?? item['id'] ?? '').toString()) ??
-        0;
-  }
-
-  String _categoryName(Map<String, dynamic> item) {
-    return (item['category_name'] ?? item['name'] ?? item['title'] ?? '')
-        .toString();
-  }
-
-  String? _resolveGroupByCategoryName(String categoryName) {
-    for (final entry in _categoryGroups.entries) {
-      if (entry.value.contains(categoryName)) {
-        return entry.key;
-      }
-    }
-    return null;
-  }
-
-  void _applyGroup(String? group) {
-    _selectedGroup = group;
-
-    if (group == null) {
-      _filteredCategories = [];
-      _selectedCategoryId = null;
-      return;
-    }
-
-    final allowedNames = _categoryGroups[group] ?? [];
-
-    _filteredCategories = _allCategories
-        .where((item) => allowedNames.contains(_categoryName(item)))
-        .toList();
-
-    final stillExists = _filteredCategories.any(
-      (item) => _categoryId(item) == _selectedCategoryId,
-    );
-
-    if (!stillExists) {
-      _selectedCategoryId = null;
-    }
   }
 
   void _fillFromInitial() {
@@ -144,6 +56,9 @@ class _SellerProductEditScreenState extends State<SellerProductEditScreen> {
     _selectedCategoryId = int.tryParse(
       product['category_id']?.toString() ?? '',
     );
+    _selectedSubcategoryId = int.tryParse(
+      product['subcategory_id']?.toString() ?? '',
+    );
     _nameController.text = (product['name'] ?? '').toString();
     _descriptionController.text = (product['description'] ?? '').toString();
     _priceController.text = (product['price'] ?? '').toString();
@@ -151,37 +66,124 @@ class _SellerProductEditScreenState extends State<SellerProductEditScreen> {
     _currencyController.text = (product['currency'] ?? 'BYN').toString();
   }
 
+  void _clearParameterControllers() {
+    for (final controller in _parameterControllers.values) {
+      controller.dispose();
+    }
+    _parameterControllers.clear();
+  }
+
   Future<void> _load() async {
     final controller = context.read<SellerController>();
 
     final categories = await controller.getCategories();
+
+    List<Map<String, dynamic>> subcategories = [];
+    List<Map<String, dynamic>> parameters = [];
     List<Map<String, dynamic>> images = [];
+
+    if (_selectedCategoryId != null) {
+      subcategories = await controller.getSubcategories(_selectedCategoryId!);
+    }
+
+    if (_selectedCategoryId != null && _selectedSubcategoryId != null) {
+      parameters = await controller.getSubcategoryParameters(
+        categoryId: _selectedCategoryId!,
+        subcategoryId: _selectedSubcategoryId!,
+      );
+    }
 
     if (_productId != null) {
       images = await controller.getProductImages(_productId!);
     }
 
-    _allCategories = categories;
+    if (!mounted) return;
 
-    if (_selectedCategoryId != null) {
-      final current = _allCategories.where(
-        (item) => _categoryId(item) == _selectedCategoryId,
-      );
-      if (current.isNotEmpty) {
-        _selectedGroup = _resolveGroupByCategoryName(
-          _categoryName(current.first),
-        );
-      }
-    }
+    _clearParameterControllers();
 
-    _applyGroup(_selectedGroup);
+    setState(() {
+      _categories = categories;
+      _subcategories = subcategories;
+      _subcategoryParameters = parameters;
+      _images = images;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _onCategoryChanged(int? value) async {
+    _clearParameterControllers();
+
+    setState(() {
+      _selectedCategoryId = value;
+      _selectedSubcategoryId = null;
+      _subcategories = [];
+      _subcategoryParameters = [];
+    });
+
+    if (value == null) return;
+
+    final subcategories = await context
+        .read<SellerController>()
+        .getSubcategories(value);
 
     if (!mounted) return;
 
     setState(() {
-      _images = images;
-      _isLoading = false;
+      _subcategories = subcategories;
     });
+  }
+
+  Future<void> _onSubcategoryChanged(int? value) async {
+    _clearParameterControllers();
+
+    setState(() {
+      _selectedSubcategoryId = value;
+      _subcategoryParameters = [];
+    });
+
+    if (value == null || _selectedCategoryId == null) return;
+
+    final parameters = await context
+        .read<SellerController>()
+        .getSubcategoryParameters(
+          categoryId: _selectedCategoryId!,
+          subcategoryId: value,
+        );
+
+    if (!mounted) return;
+
+    setState(() {
+      _subcategoryParameters = parameters;
+    });
+  }
+
+  List<Map<String, dynamic>> _buildParameterItems() {
+    final items = <Map<String, dynamic>>[];
+
+    for (final parameter in _subcategoryParameters) {
+      final parameterId =
+          int.tryParse((parameter['parameter_id'] ?? '').toString()) ?? 0;
+
+      if (parameterId <= 0) continue;
+
+      final controller = _parameterControllers[parameterId];
+      final value = controller?.text.trim() ?? '';
+
+      if (value.isEmpty) continue;
+
+      items.add({'parameter_id': parameterId, 'value': value});
+    }
+
+    return items;
+  }
+
+  Future<void> _saveParameters(int productId) async {
+    final items = _buildParameterItems();
+
+    await context.read<SellerController>().setProductParameters(
+      productId: productId,
+      items: items,
+    );
   }
 
   Future<void> _saveBasic() async {
@@ -194,6 +196,13 @@ class _SellerProductEditScreenState extends State<SellerProductEditScreen> {
       return;
     }
 
+    if (_selectedSubcategoryId == null || _selectedSubcategoryId! <= 0) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Выберите подкатегорию')));
+      return;
+    }
+
     setState(() {
       _isSaving = true;
     });
@@ -203,12 +212,19 @@ class _SellerProductEditScreenState extends State<SellerProductEditScreen> {
     if (_productId == null) {
       final createdId = await controller.createProduct(
         categoryId: _selectedCategoryId!,
+        subcategoryId: _selectedSubcategoryId!,
         name: _nameController.text.trim(),
         description: _descriptionController.text.trim(),
         price: _priceController.text.trim(),
         quantity: int.tryParse(_quantityController.text.trim()) ?? 0,
         currency: _currencyController.text.trim(),
       );
+
+      if (!mounted) return;
+
+      if (createdId != null) {
+        await _saveParameters(createdId);
+      }
 
       if (!mounted) return;
 
@@ -243,12 +259,19 @@ class _SellerProductEditScreenState extends State<SellerProductEditScreen> {
     final ok = await controller.updateProduct(
       productId: _productId!,
       categoryId: _selectedCategoryId,
+      subcategoryId: _selectedSubcategoryId,
       name: _nameController.text.trim(),
       description: _descriptionController.text.trim(),
       price: _priceController.text.trim(),
       quantity: int.tryParse(_quantityController.text.trim()) ?? 0,
       currency: _currencyController.text.trim(),
     );
+
+    if (!mounted) return;
+
+    if (ok) {
+      await _saveParameters(_productId!);
+    }
 
     if (!mounted) return;
 
@@ -364,6 +387,7 @@ class _SellerProductEditScreenState extends State<SellerProductEditScreen> {
 
   @override
   void dispose() {
+    _clearParameterControllers();
     _nameController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
@@ -376,7 +400,7 @@ class _SellerProductEditScreenState extends State<SellerProductEditScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final title = _isEdit ? 'Редактировать товар' : 'Новый товар';
+    final title = _productId != null ? 'Редактировать товар' : 'Новый товар';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
@@ -388,25 +412,19 @@ class _SellerProductEditScreenState extends State<SellerProductEditScreen> {
               children: [
                 SellerProductForm(
                   formKey: _formKey,
-                  groupItems: _categoryGroups.keys.toList(),
-                  selectedGroup: _selectedGroup,
-                  onGroupChanged: (value) {
-                    setState(() {
-                      _applyGroup(value);
-                    });
-                  },
-                  categories: _filteredCategories,
+                  categories: _categories,
                   selectedCategoryId: _selectedCategoryId,
-                  onCategoryChanged: (value) {
-                    setState(() {
-                      _selectedCategoryId = value;
-                    });
-                  },
+                  onCategoryChanged: _onCategoryChanged,
+                  subcategories: _subcategories,
+                  selectedSubcategoryId: _selectedSubcategoryId,
+                  onSubcategoryChanged: _onSubcategoryChanged,
                   nameController: _nameController,
                   descriptionController: _descriptionController,
                   priceController: _priceController,
                   quantityController: _quantityController,
                   currencyController: _currencyController,
+                  parameters: _subcategoryParameters,
+                  parameterControllers: _parameterControllers,
                 ),
                 const SizedBox(height: 16),
                 SizedBox(
@@ -422,7 +440,11 @@ class _SellerProductEditScreenState extends State<SellerProductEditScreen> {
                               color: Colors.white,
                             ),
                           )
-                        : Text(_isEdit ? 'Сохранить товар' : 'Создать товар'),
+                        : Text(
+                            _productId != null
+                                ? 'Сохранить товар'
+                                : 'Создать товар',
+                          ),
                   ),
                 ),
                 if (_productId != null) ...[

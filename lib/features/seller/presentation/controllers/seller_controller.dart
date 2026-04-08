@@ -124,8 +124,23 @@ class SellerController extends Cubit<SellerState> {
     return _sellerApi.getCategories();
   }
 
+  Future<List<Map<String, dynamic>>> getSubcategories(int categoryId) async {
+    return _sellerApi.getSubcategories(categoryId);
+  }
+
+  Future<List<Map<String, dynamic>>> getSubcategoryParameters({
+    required int categoryId,
+    required int subcategoryId,
+  }) async {
+    return _sellerApi.getSubcategoryParameters(
+      categoryId: categoryId,
+      subcategoryId: subcategoryId,
+    );
+  }
+
   Future<int?> createProduct({
     required int categoryId,
+    required int subcategoryId,
     required String name,
     String? description,
     required String price,
@@ -137,6 +152,7 @@ class SellerController extends Cubit<SellerState> {
     try {
       final productId = await _sellerApi.createProduct(
         categoryId: categoryId,
+        subcategoryId: subcategoryId,
         name: name,
         description: description,
         price: price,
@@ -166,6 +182,7 @@ class SellerController extends Cubit<SellerState> {
   Future<bool> updateProduct({
     required int productId,
     int? categoryId,
+    int? subcategoryId,
     String? name,
     String? description,
     String? price,
@@ -178,6 +195,7 @@ class SellerController extends Cubit<SellerState> {
       await _sellerApi.updateProduct(
         productId: productId,
         categoryId: categoryId,
+        subcategoryId: subcategoryId,
         name: name,
         description: description,
         price: price,
@@ -238,6 +256,19 @@ class SellerController extends Cubit<SellerState> {
         imageUrl: imageUrl,
         sortOrder: sortOrder,
       );
+      return true;
+    } catch (e) {
+      emit(state.copyWith(errorMessage: e.toString()));
+      return false;
+    }
+  }
+
+  Future<bool> setProductParameters({
+    required int productId,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    try {
+      await _sellerApi.setProductParameters(productId: productId, items: items);
       return true;
     } catch (e) {
       emit(state.copyWith(errorMessage: e.toString()));

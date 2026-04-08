@@ -61,7 +61,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     final role = _selectedRole == RegisterRole.seller ? 'seller' : 'buyer';
 
-    final ok = await context.read<AuthController>().register(
+    await context.read<AuthController>().register(
       email: _emailController.text.trim(),
       password: _passwordController.text.trim(),
       role: role,
@@ -69,13 +69,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ? _shopNameController.text.trim()
           : null,
     );
-
-    if (!mounted) return;
-
-    if (ok) {
-      final userRole = context.read<AuthController>().state.user?.role;
-      context.go(RouteGuards.homeByRole(userRole));
-    }
   }
 
   Widget _roleCard({

@@ -47,10 +47,16 @@ Future<Response> onRequest(RequestContext context, String id) async {
       oi.price_snapshot,
       (oi.quantity * oi.price_snapshot)::double precision AS line_total,
       oi.source_cart_item_id,
-
       ci.product_id,
       p.name,
-      p.currency
+      p.currency,
+      (
+        SELECT pi.image_url
+        FROM product_images pi
+        WHERE pi.product_id = p.product_id
+        ORDER BY pi.sort_order ASC, pi.image_id ASC
+        LIMIT 1
+      ) AS image_url
     FROM order_items oi
     LEFT JOIN cart_items ci ON ci.cart_item_id = oi.source_cart_item_id
     LEFT JOIN products p ON p.product_id = ci.product_id
@@ -70,6 +76,7 @@ Future<Response> onRequest(RequestContext context, String id) async {
       'product_id': r[5],
       'product_name': r[6],
       'currency': r[7],
+      'image_url': r[8],
     };
   }).toList();
 

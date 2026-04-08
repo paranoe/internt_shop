@@ -2,13 +2,16 @@
 import 'package:backend/src/db/postgres_pool.dart';
 
 Future<Response> onRequest(RequestContext context, String id) async {
-  if (context.request.method != HttpMethod.get)
+  if (context.request.method != HttpMethod.get) {
     return Response(statusCode: 405);
+  }
 
-  final productId = int.tryParse(id);
-  if (productId == null) {
+  final podcategoryId = int.tryParse(id);
+  if (podcategoryId == null || podcategoryId <= 0) {
     return Response.json(
-        statusCode: 400, body: {'error': 'Invalid product id'});
+      statusCode: 400,
+      body: {'error': 'Invalid podcategory id'},
+    );
   }
 
   final db = context.read<PostgresClient>();
@@ -17,26 +20,29 @@ Future<Response> onRequest(RequestContext context, String id) async {
   final rows = await conn.execute(
     '''
     SELECT
-      p.parameter_id,
+      cp.podcategory_id,
+      cp.parameter_id,
+      cp.is_required,
       p.name,
-      p.data_type,
-      v.value_text
-    FROM product_parameter_values v
-    JOIN parameters p ON p.parameter_id = v.parameter_id
-    WHERE v.product_id = \$1
+      p.data_type
+    FROM category_parameters cp
+    JOIN parameters p
+      ON p.parameter_id = cp.parameter_id
+    WHERE cp.podcategory_id = \$1
     ORDER BY p.name ASC
     ''',
-    parameters: [productId],
+    parameters: [podcategoryId],
   );
 
-  final items = rows
-      .map((r) => {
-            'parameter_id': r[0],
-            'name': r[1],
-            'data_type': r[2],
-            'value': r[3],
-          })
-      .toList();
+  final items = rows.map((r) {
+    return {
+      'podcategory_id': r[0],
+      'parameter_id': r[1],
+      'is_required': r[2],
+      'name': r[3],
+      'data_type': r[4],
+    };
+  }).toList();
 
   return Response.json(body: {'items': items});
 }

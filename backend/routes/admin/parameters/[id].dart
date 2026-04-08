@@ -3,136 +3,146 @@
 import 'package:dart_frog/dart_frog.dart';
 import 'package:backend/src/db/postgres_pool.dart';
 
+int _toInt(dynamic value, {int fallback = 0}) {
+  if (value == null) return fallback;
+  return int.tryParse(value.toString()) ?? fallback;
+}
+
+String _toStringValue(dynamic value, {String fallback = ''}) {
+  final text = value?.toString().trim() ?? '';
+  return text.isEmpty ? fallback : text;
+}
+
 Future<Response> onRequest(RequestContext context, String id) async {
-  final paymentId = int.tryParse(id);
-  if (paymentId == null) {
+  final parameterId = int.tryParse(id);
+  if (parameterId == null || parameterId <= 0) {
     return Response.json(
       statusCode: 400,
-      body: {'error': 'Invalid payment id'},
+      body: {'error': 'Invalid parameter id'},
     );
   }
 
   final db = context.read<PostgresClient>();
   final conn = await db.connection;
 
-  if (context.request.method == HttpMethod.get) {
-    final rows = await conn.execute(
-      '''
-      SELECT
-        p.payment_id,
-        p.order_id,
-        p.payment_method_id,
-        p.card_id,
-        p.amount,
-        p.created_at,
-        pm.name
-      FROM payments p
-      LEFT JOIN payment_methods pm
-        ON pm.payment_method_id = p.payment_method_id
-      WHERE p.payment_id = \$1
-      LIMIT 1
-      ''',
-      parameters: [paymentId],
-    );
+  switch (context.request.method) {
+    case HttpMethod.patch:
+      final raw = await context.request.body();
+      final data = jsonDecode(raw) as Map<String, dynamic>;
 
-    if (rows.length == 0) {
-      return Response.json(
-        statusCode: 404,
-        body: {'error': 'Payment not found'},
+      final updates = <String>[];
+      final parameters = <dynamic>[];
+      var index = 1;
+
+      if (data.containsKey('name')) {
+        final name = _toStringValue(data['name']);
+        if (name.isEmpty) {
+          return Response.json(
+            statusCode: 400,
+            body: {'error': 'name cannot be empty'},
+          );
+        }
+
+        final existing = await conn.execute(
+          '''
+          SELECT parameter_id
+          FROM parameters
+          WHERE LOWER(name) = LOWER(\$1)
+            AND parameter_id <> \$2
+          LIMIT 1
+          ''',
+          parameters: [name, parameterId],
+        );
+
+        if (existing.length > 0) {
+          return Response.json(
+            statusCode: 409,
+            body: {'error': 'Parameter with this name already exists'},
+          );
+        }
+
+        updates.add('name = \$$index');
+        parameters.add(name);
+        index++;
+      }
+
+      if (data.containsKey('data_type')) {
+        final dataType = _toStringValue(data['data_type']);
+
+        const allowedTypes = {'text', 'number', 'boolean'};
+        if (!allowedTypes.contains(dataType)) {
+          return Response.json(
+            statusCode: 400,
+            body: {'error': 'data_type must be text, number or boolean'},
+          );
+        }
+
+        updates.add('data_type = \$$index');
+        parameters.add(dataType);
+        index++;
+      }
+
+      if (updates.isEmpty) {
+        return Response.json(
+          statusCode: 400,
+          body: {'error': 'No fields to update'},
+        );
+      }
+
+      parameters.add(parameterId);
+
+      final updated = await conn.execute(
+        '''
+        UPDATE parameters
+        SET ${updates.join(', ')}
+        WHERE parameter_id = \$$index
+        RETURNING parameter_id, name, data_type
+        ''',
+        parameters: parameters,
       );
-    }
 
-    final r = rows.first;
+      if (updated.length == 0) {
+        return Response.json(
+          statusCode: 404,
+          body: {'error': 'Parameter not found'},
+        );
+      }
 
-    return Response.json(
-      body: {
-        'payment_id': r[0],
-        'order_id': r[1],
-        'payment_method_id': r[2],
-        'card_id': r[3],
-        'amount': r[4].toString(),
-        'created_at': r[5].toString(),
-        'payment_method_name': r[6],
-      },
-    );
-  }
+      final row = updated.first;
 
-  if (context.request.method == HttpMethod.patch) {
-    final paymentRows = await conn.execute(
-      '''
-      SELECT
-        p.payment_id,
-        p.order_id,
-        o.status
-      FROM payments p
-      JOIN orders o ON o.order_id = p.order_id
-      WHERE p.payment_id = \$1
-      LIMIT 1
-      ''',
-      parameters: [paymentId],
-    );
-
-    if (paymentRows.length == 0) {
       return Response.json(
-        statusCode: 404,
-        body: {'error': 'Payment not found'},
-      );
-    }
-
-    final row = paymentRows.first;
-    final orderId = (row[1] as num).toInt();
-    final currentOrderStatus = row[2].toString();
-
-    final raw = await context.request.body();
-    final data = (raw.isEmpty ? <String, dynamic>{} : jsonDecode(raw))
-        as Map<String, dynamic>;
-
-    final newStatus = (data['status'] ?? '').toString().trim();
-
-    const allowedAdminStatuses = {'paid', 'cancelled'};
-
-    if (!allowedAdminStatuses.contains(newStatus)) {
-      return Response.json(
-        statusCode: 400,
         body: {
-          'error': 'Admin can only set status to paid or cancelled',
+          'parameter_id': row[0],
+          'name': row[1],
+          'data_type': row[2],
         },
       );
-    }
 
-    final validTransition =
-        (currentOrderStatus == 'created' && newStatus == 'paid') ||
-            (currentOrderStatus == 'created' && newStatus == 'cancelled');
+    case HttpMethod.delete:
+      final deleted = await conn.execute(
+        '''
+        DELETE FROM parameters
+        WHERE parameter_id = \$1
+        RETURNING parameter_id
+        ''',
+        parameters: [parameterId],
+      );
 
-    if (!validTransition) {
+      if (deleted.length == 0) {
+        return Response.json(
+          statusCode: 404,
+          body: {'error': 'Parameter not found'},
+        );
+      }
+
       return Response.json(
-        statusCode: 400,
         body: {
-          'error':
-              'Invalid status transition. Allowed: created -> paid, created -> cancelled',
+          'deleted': true,
+          'parameter_id': parameterId,
         },
       );
-    }
 
-    await conn.execute(
-      '''
-      UPDATE orders
-      SET status = \$1
-      WHERE order_id = \$2
-      ''',
-      parameters: [newStatus, orderId],
-    );
-
-    return Response.json(
-      body: {
-        'ok': true,
-        'payment_id': paymentId,
-        'order_id': orderId,
-        'old_status': currentOrderStatus,
-        'new_status': newStatus,
-      },
-    );
+    default:
+      return Response(statusCode: 405);
   }
-
-  return Response(statusCode: 405);
 }

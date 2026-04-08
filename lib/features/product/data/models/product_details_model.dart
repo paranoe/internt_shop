@@ -10,6 +10,7 @@ class ProductDetailsModel extends ProductDetails {
     super.categoryId,
     super.sellerId,
     super.mainImage,
+    super.canReview,
   });
 
   factory ProductDetailsModel.fromJson(Map<String, dynamic> json) {
@@ -26,6 +27,7 @@ class ProductDetailsModel extends ProductDetails {
           ? null
           : int.tryParse(json['seller_id'].toString()),
       mainImage: json['main_image']?.toString(),
+      canReview: json['can_review'] == true,
     );
   }
 }

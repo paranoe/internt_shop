@@ -1,5 +1,6 @@
 ﻿import 'package:dart_frog/dart_frog.dart';
 import 'package:backend/src/db/postgres_pool.dart';
+import 'package:backend/src/core/security/auth_user.dart';
 
 Future<Response> onRequest(RequestContext context, String id) async {
   if (context.request.method != HttpMethod.get) {
@@ -13,9 +14,31 @@ Future<Response> onRequest(RequestContext context, String id) async {
       body: {'error': 'Invalid product id'},
     );
   }
-
+  bool canReview = false;
   final db = context.read<PostgresClient>();
   final conn = await db.connection;
+
+  try {
+    final auth = context.read<AuthUser>();
+
+    final purchaseRows = await conn.execute(
+      '''
+      SELECT 1
+      FROM orders o
+      JOIN order_items oi ON oi.order_id = o.order_id
+      JOIN cart_items ci ON ci.cart_item_id = oi.source_cart_item_id
+      WHERE o.buyer_id = \$1
+        AND o.status = 'delivered'
+        AND ci.product_id = \$2
+      LIMIT 1
+      ''',
+      parameters: [auth.userId, productId],
+    );
+
+    canReview = purchaseRows.isNotEmpty;
+  } catch (_) {
+    canReview = false;
+  }
 
   final rows = await conn.execute(
     '''
@@ -60,6 +83,7 @@ Future<Response> onRequest(RequestContext context, String id) async {
       'category_id': r[5],
       'seller_id': r[6],
       'main_image': r[7],
+      'can_review': canReview,
     },
   );
 }

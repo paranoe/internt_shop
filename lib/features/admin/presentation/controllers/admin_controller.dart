@@ -1,0 +1,716 @@
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:diplomeprojectmobile/features/admin/data/datasources/admin_api.dart';
+import 'package:diplomeprojectmobile/features/admin/presentation/controllers/admin_state.dart';
+
+class AdminController extends Cubit<AdminState> {
+  AdminController({required AdminApi adminApi})
+    : _adminApi = adminApi,
+      super(const AdminState());
+
+  final AdminApi _adminApi;
+
+  Future<void> loadAll() async {
+    emit(state.copyWith(status: AdminStatus.loading, clearError: true));
+
+    try {
+      final parameters = await _adminApi.getParameters();
+      final categories = await _adminApi.getCategories();
+      final bindings = await _adminApi.getSubcategoryParameterBindings();
+
+      emit(
+        state.copyWith(
+          status: AdminStatus.success,
+          parameters: parameters,
+          categories: categories,
+          bindings: bindings,
+          clearError: true,
+        ),
+      );
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+    }
+  }
+
+  Future<void> loadSubcategoriesByCategory(int categoryId) async {
+    try {
+      final subcategories = await _adminApi.getSubcategories(
+        categoryId: categoryId,
+      );
+
+      emit(state.copyWith(subcategories: subcategories, clearError: true));
+    } catch (e) {
+      emit(state.copyWith(errorMessage: e.toString()));
+    }
+  }
+
+  Future<bool> createParameter({
+    required String name,
+    required String dataType,
+  }) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.createParameter(name: name, dataType: dataType);
+      await loadAll();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> deleteParameter(int parameterId) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.deleteParameter(parameterId);
+      await loadAll();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> createBinding({
+    required int subcategoryId,
+    required int parameterId,
+    required bool isRequired,
+  }) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.createSubcategoryParameterBinding(
+        subcategoryId: subcategoryId,
+        parameterId: parameterId,
+        isRequired: isRequired,
+      );
+      await loadAll();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> deleteBinding({
+    required int subcategoryId,
+    required int parameterId,
+  }) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.deleteSubcategoryParameterBinding(
+        subcategoryId: subcategoryId,
+        parameterId: parameterId,
+      );
+      await loadAll();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<void> loadOrders({String? status}) async {
+    emit(state.copyWith(status: AdminStatus.loading, clearError: true));
+
+    try {
+      final orders = await _adminApi.getOrders(status: status);
+
+      emit(
+        state.copyWith(
+          status: AdminStatus.success,
+          orders: orders,
+          clearError: true,
+        ),
+      );
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+    }
+  }
+
+  Future<void> loadOrderDetails(int orderId) async {
+    emit(
+      state.copyWith(
+        status: AdminStatus.loading,
+        clearError: true,
+        clearSelectedOrder: true,
+      ),
+    );
+
+    try {
+      final data = await _adminApi.getOrderDetails(orderId);
+      final order = Map<String, dynamic>.from(
+        data['order'] as Map? ?? const {},
+      );
+      final items = (data['items'] as List? ?? const [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
+      emit(
+        state.copyWith(
+          status: AdminStatus.success,
+          selectedOrder: order,
+          selectedOrderItems: items,
+          clearError: true,
+        ),
+      );
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+    }
+  }
+
+  Future<bool> updateOrderStatus({
+    required int orderId,
+    required String status,
+  }) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.updateOrderStatus(orderId: orderId, status: status);
+      await loadOrderDetails(orderId);
+      await loadOrders();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> confirmOrderPayment(int orderId) async {
+    return updateOrderStatus(orderId: orderId, status: 'paid');
+  }
+
+  Future<void> loadCities({String? query}) async {
+    emit(state.copyWith(status: AdminStatus.loading, clearError: true));
+
+    try {
+      final cities = await _adminApi.getCities(query: query);
+
+      emit(
+        state.copyWith(
+          status: AdminStatus.success,
+          cities: cities,
+          clearError: true,
+        ),
+      );
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+    }
+  }
+
+  Future<bool> createCity({required String cityName}) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.createCity(cityName: cityName);
+      await loadCities();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> updateCity({
+    required int cityId,
+    required String cityName,
+  }) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.updateCity(cityId: cityId, cityName: cityName);
+      await loadCities();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> deleteCity(int cityId) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.deleteCity(cityId);
+      await loadCities();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<void> loadPickupPoints({int? cityId}) async {
+    emit(state.copyWith(status: AdminStatus.loading, clearError: true));
+
+    try {
+      final pickupPoints = await _adminApi.getPickupPoints(cityId: cityId);
+
+      emit(
+        state.copyWith(
+          status: AdminStatus.success,
+          pickupPoints: pickupPoints,
+          clearError: true,
+        ),
+      );
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+    }
+  }
+
+  Future<bool> createPickupPoint({required int cityId}) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.createPickupPoint(cityId: cityId);
+      await loadPickupPoints();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> updatePickupPoint({
+    required int pickupPointId,
+    required int cityId,
+  }) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.updatePickupPoint(
+        pickupPointId: pickupPointId,
+        cityId: cityId,
+      );
+      await loadPickupPoints();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> deletePickupPoint(int pickupPointId) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.deletePickupPoint(pickupPointId);
+      await loadPickupPoints();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<void> loadProducts({
+    String? query,
+    int? categoryId,
+    int? subcategoryId,
+    int? sellerId,
+  }) async {
+    emit(state.copyWith(status: AdminStatus.loading, clearError: true));
+
+    try {
+      final products = await _adminApi.getProducts(
+        query: query,
+        categoryId: categoryId,
+        subcategoryId: subcategoryId,
+        sellerId: sellerId,
+      );
+
+      emit(
+        state.copyWith(
+          status: AdminStatus.success,
+          products: products,
+          clearError: true,
+        ),
+      );
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+    }
+  }
+
+  Future<bool> createProduct({
+    required int categoryId,
+    required int sellerId,
+    required int subcategoryId,
+    required String name,
+    String? description,
+    required String price,
+    required int quantity,
+    String currency = 'BYN',
+  }) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.createProduct(
+        categoryId: categoryId,
+        sellerId: sellerId,
+        subcategoryId: subcategoryId,
+        name: name,
+        description: description,
+        price: price,
+        quantity: quantity,
+        currency: currency,
+      );
+      await loadProducts();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> updateProduct({
+    required int productId,
+    int? categoryId,
+    int? sellerId,
+    int? subcategoryId,
+    String? name,
+    String? description,
+    String? price,
+    int? quantity,
+    String? currency,
+  }) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.updateProduct(
+        productId: productId,
+        categoryId: categoryId,
+        sellerId: sellerId,
+        subcategoryId: subcategoryId,
+        name: name,
+        description: description,
+        price: price,
+        quantity: quantity,
+        currency: currency,
+      );
+      await loadProducts();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> deleteProduct(int productId) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.deleteProduct(productId);
+      await loadProducts();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<void> loadSellers({String? query}) async {
+    emit(state.copyWith(status: AdminStatus.loading, clearError: true));
+
+    try {
+      final sellers = await _adminApi.getSellers(query: query);
+
+      emit(
+        state.copyWith(
+          status: AdminStatus.success,
+          sellers: sellers,
+          clearError: true,
+        ),
+      );
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+    }
+  }
+
+  Future<bool> createSeller({
+    required String shopName,
+    String? description,
+    String? inn,
+    String? unp,
+    required int userId,
+  }) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.createSeller(
+        shopName: shopName,
+        description: description,
+        inn: inn,
+        unp: unp,
+        userId: userId,
+      );
+      await loadSellers();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> updateSeller({
+    required int sellerId,
+    String? shopName,
+    String? description,
+    String? inn,
+    String? unp,
+    int? userId,
+  }) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.updateSeller(
+        sellerId: sellerId,
+        shopName: shopName,
+        description: description,
+        inn: inn,
+        unp: unp,
+        userId: userId,
+      );
+      await loadSellers();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> deleteSeller(int sellerId) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.deleteSeller(sellerId);
+      await loadSellers();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> createCategory({required String categoryName}) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.createCategory(categoryName: categoryName);
+      await loadAll();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> updateCategory({
+    required int categoryId,
+    required String categoryName,
+  }) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.updateCategory(
+        categoryId: categoryId,
+        categoryName: categoryName,
+      );
+      await loadAll();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> deleteCategory(int categoryId) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.deleteCategory(categoryId);
+      await loadAll();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<void> loadAdminSubcategories({String? query, int? categoryId}) async {
+    emit(state.copyWith(status: AdminStatus.loading, clearError: true));
+
+    try {
+      final items = await _adminApi.getSubcategories(
+        query: query,
+        categoryId: categoryId,
+      );
+
+      emit(
+        state.copyWith(
+          status: AdminStatus.success,
+          categories: state.categories,
+          adminSubcategories: items,
+          clearError: true,
+        ),
+      );
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+    }
+  }
+
+  Future<bool> createSubcategory({
+    required String name,
+    required int categoryId,
+  }) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.createSubcategory(name: name, categoryId: categoryId);
+      await loadAdminSubcategories();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> updateSubcategory({
+    required int subcategoryId,
+    String? name,
+    int? categoryId,
+  }) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.updateSubcategory(
+        subcategoryId: subcategoryId,
+        name: name,
+        categoryId: categoryId,
+      );
+      await loadAdminSubcategories();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> deleteSubcategory(int subcategoryId) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.deleteSubcategory(subcategoryId);
+      await loadAdminSubcategories();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<void> loadDashboard() async {
+    emit(state.copyWith(status: AdminStatus.loading, clearError: true));
+
+    try {
+      final stats = await _adminApi.getStats();
+      final orders = await _adminApi.getOrders(status: 'created');
+
+      emit(
+        state.copyWith(
+          status: AdminStatus.success,
+          stats: stats,
+          orders: orders,
+          clearError: true,
+        ),
+      );
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+    }
+  }
+
+  Future<void> loadCategoriesOnly() async {
+    emit(state.copyWith(status: AdminStatus.loading, clearError: true));
+
+    try {
+      final categories = await _adminApi.getCategories();
+
+      emit(
+        state.copyWith(
+          status: AdminStatus.success,
+          categories: categories,
+          clearError: true,
+        ),
+      );
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+    }
+  }
+}

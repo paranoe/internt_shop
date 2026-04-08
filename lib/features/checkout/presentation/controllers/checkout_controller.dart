@@ -13,23 +13,20 @@ import 'package:diplomeprojectmobile/features/checkout/domain/usecases/get_picku
 import 'package:diplomeprojectmobile/features/checkout/domain/usecases/get_user_cards_usecase.dart';
 import 'package:diplomeprojectmobile/features/checkout/domain/usecases/preview_checkout_usecase.dart';
 import 'package:diplomeprojectmobile/features/checkout/presentation/controllers/checkout_state.dart';
+import 'package:diplomeprojectmobile/core/utils/error_mapper.dart';
 
 class CheckoutController extends Cubit<CheckoutState> {
   CheckoutController({required CheckoutApi checkoutApi})
     : _checkoutApi = checkoutApi,
-      _previewUseCase = PreviewCheckoutUseCase(CheckoutRepoImpl(checkoutApi)),
-      _getCitiesUseCase = GetCitiesUseCase(CheckoutRepoImpl(checkoutApi)),
-      _getPickupPointsUseCase = GetPickupPointsUseCase(
-        CheckoutRepoImpl(checkoutApi),
-      ),
+      _previewUseCase = PreviewCheckoutUseCase(_buildRepo(checkoutApi)),
+      _getCitiesUseCase = GetCitiesUseCase(_buildRepo(checkoutApi)),
+      _getPickupPointsUseCase = GetPickupPointsUseCase(_buildRepo(checkoutApi)),
       _getPaymentMethodsUseCase = GetPaymentMethodsUseCase(
-        CheckoutRepoImpl(checkoutApi),
+        _buildRepo(checkoutApi),
       ),
-      _getUserCardsUseCase = GetUserCardsUseCase(CheckoutRepoImpl(checkoutApi)),
-      _addUserCardUseCase = AddUserCardUseCase(CheckoutRepoImpl(checkoutApi)),
-      _deleteUserCardUseCase = DeleteUserCardUseCase(
-        CheckoutRepoImpl(checkoutApi),
-      ),
+      _getUserCardsUseCase = GetUserCardsUseCase(_buildRepo(checkoutApi)),
+      _addUserCardUseCase = AddUserCardUseCase(_buildRepo(checkoutApi)),
+      _deleteUserCardUseCase = DeleteUserCardUseCase(_buildRepo(checkoutApi)),
       super(const CheckoutState());
 
   final CheckoutApi _checkoutApi;
@@ -41,6 +38,10 @@ class CheckoutController extends Cubit<CheckoutState> {
   final AddUserCardUseCase _addUserCardUseCase;
   final DeleteUserCardUseCase _deleteUserCardUseCase;
 
+  static CheckoutRepoImpl _buildRepo(CheckoutApi checkoutApi) {
+    return CheckoutRepoImpl(checkoutApi);
+  }
+
   Future<void> load() async {
     emit(state.copyWith(status: CheckoutStatus.loading, clearError: true));
 
@@ -50,6 +51,10 @@ class CheckoutController extends Cubit<CheckoutState> {
       final methods = await _getPaymentMethodsUseCase();
       final cards = await _getUserCardsUseCase();
 
+      final selectedCity = cities.isNotEmpty ? cities.first : null;
+      final selectedMethod = methods.isNotEmpty ? methods.first : null;
+      final selectedCard = cards.isNotEmpty ? cards.first : null;
+
       emit(
         state.copyWith(
           status: CheckoutStatus.success,
@@ -57,21 +62,21 @@ class CheckoutController extends Cubit<CheckoutState> {
           cities: cities,
           paymentMethods: methods,
           userCards: cards,
-          selectedCity: cities.isNotEmpty ? cities.first : null,
-          selectedPaymentMethod: methods.isNotEmpty ? methods.first : null,
-          selectedCard: cards.isNotEmpty ? cards.first : null,
+          selectedCity: selectedCity,
+          selectedPaymentMethod: selectedMethod,
+          selectedCard: selectedCard,
           clearError: true,
         ),
       );
 
-      if (cities.isNotEmpty) {
-        await loadPickupPoints(cities.first.cityId);
+      if (selectedCity != null) {
+        await loadPickupPoints(selectedCity.cityId);
       }
     } catch (e) {
       emit(
         state.copyWith(
           status: CheckoutStatus.error,
-          errorMessage: e.toString(),
+          errorMessage: ErrorMapper.map(e),
         ),
       );
     }
@@ -80,7 +85,11 @@ class CheckoutController extends Cubit<CheckoutState> {
   Future<void> loadPickupPoints(int cityId) async {
     try {
       final points = await _getPickupPointsUseCase(cityId: cityId);
-      final selectedCity = state.cities.firstWhere((e) => e.cityId == cityId);
+
+      final selectedCity =
+          state.cities.where((e) => e.cityId == cityId).isNotEmpty
+          ? state.cities.firstWhere((e) => e.cityId == cityId)
+          : null;
 
       emit(
         state.copyWith(
@@ -91,7 +100,7 @@ class CheckoutController extends Cubit<CheckoutState> {
         ),
       );
     } catch (e) {
-      emit(state.copyWith(errorMessage: e.toString()));
+      emit(state.copyWith(errorMessage: ErrorMapper.map(e)));
     }
   }
 
@@ -122,7 +131,7 @@ class CheckoutController extends Cubit<CheckoutState> {
 
       return true;
     } catch (e) {
-      emit(state.copyWith(errorMessage: e.toString()));
+      emit(state.copyWith(errorMessage: ErrorMapper.map(e)));
       return false;
     }
   }
@@ -148,7 +157,7 @@ class CheckoutController extends Cubit<CheckoutState> {
         ),
       );
     } catch (e) {
-      emit(state.copyWith(errorMessage: e.toString()));
+      emit(state.copyWith(errorMessage: ErrorMapper.map(e)));
     }
   }
 
@@ -182,7 +191,7 @@ class CheckoutController extends Cubit<CheckoutState> {
       emit(
         state.copyWith(
           status: CheckoutStatus.error,
-          errorMessage: e.toString(),
+          errorMessage: ErrorMapper.map(e),
         ),
       );
       return null;

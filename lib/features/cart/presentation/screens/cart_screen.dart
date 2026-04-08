@@ -3,6 +3,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:diplomeprojectmobile/app/router/routes.dart';
+import 'package:diplomeprojectmobile/app/theme/colors.dart';
+import 'package:diplomeprojectmobile/app/di/env.dart';
+import 'package:diplomeprojectmobile/core/utils/price_formatter.dart';
+import 'package:diplomeprojectmobile/core/widgets/empty_state_view.dart';
 import 'package:diplomeprojectmobile/features/cart/domain/entities/cart_item.dart';
 import 'package:diplomeprojectmobile/features/cart/presentation/controllers/cart_controller.dart';
 import 'package:diplomeprojectmobile/features/cart/presentation/controllers/cart_state.dart';
@@ -25,7 +29,7 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   double _itemLineTotal(CartItem item) {
-    final price = double.tryParse(item.price) ?? 0;
+    final price = double.tryParse(item.price.replaceAll(',', '.')) ?? 0;
     return price * item.quantity;
   }
 
@@ -44,8 +48,7 @@ class _CartScreenState extends State<CartScreen> {
       currency = item.currency;
     }
 
-    return '${total.toStringAsFixed(2)} ${currency.isEmpty ? '' : currency}'
-        .trim();
+    return PriceFormatter.format(total.toString(), currency: currency);
   }
 
   int _selectedCount(List<CartItem> items) {
@@ -100,9 +103,21 @@ class _CartScreenState extends State<CartScreen> {
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
-                child: Text(
-                  state.errorMessage ?? 'Не удалось загрузить корзину',
-                  textAlign: TextAlign.center,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      state.errorMessage ?? 'Не удалось загрузить корзину',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed: () {
+                        context.read<CartController>().loadCart();
+                      },
+                      child: const Text('Повторить'),
+                    ),
+                  ],
                 ),
               ),
             );
@@ -113,21 +128,12 @@ class _CartScreenState extends State<CartScreen> {
               onRefresh: () => context.read<CartController>().loadCart(),
               child: ListView(
                 children: const [
-                  SizedBox(height: 140),
-                  Center(
-                    child: Column(
-                      children: [
-                        Icon(Icons.shopping_cart_outlined, size: 64),
-                        SizedBox(height: 12),
-                        Text(
-                          'Корзина пуста',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
+                  SizedBox(height: 120),
+                  EmptyStateView(
+                    icon: Icons.shopping_cart_outlined,
+                    title: 'Корзина пуста',
+                    subtitle:
+                        'Добавьте товары из каталога, чтобы оформить заказ.',
                   ),
                 ],
               ),
@@ -152,11 +158,11 @@ class _CartScreenState extends State<CartScreen> {
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(22),
-                          boxShadow: [
+                          boxShadow: const [
                             BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.05),
+                              color: AppColors.shadow,
                               blurRadius: 12,
-                              offset: const Offset(0, 6),
+                              offset: Offset(0, 6),
                             ),
                           ],
                         ),
@@ -172,15 +178,7 @@ class _CartScreenState extends State<CartScreen> {
                                 );
                               },
                             ),
-                            Container(
-                              width: 84,
-                              height: 84,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF1F3F9),
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                              child: const Icon(Icons.image_outlined),
-                            ),
+                            _CartItemImage(imageUrl: item.mainImage),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
@@ -188,6 +186,8 @@ class _CartScreenState extends State<CartScreen> {
                                 children: [
                                   Text(
                                     item.productName,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.w700,
@@ -195,14 +195,17 @@ class _CartScreenState extends State<CartScreen> {
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
-                                    '${item.price} ${item.currency}',
+                                    PriceFormatter.format(
+                                      item.price,
+                                      currency: item.currency,
+                                    ),
                                     style: TextStyle(
                                       color: Colors.grey.shade700,
                                     ),
                                   ),
                                   const SizedBox(height: 6),
                                   Text(
-                                    'Сумма: ${lineTotal.toStringAsFixed(2)} ${item.currency}',
+                                    'Сумма: ${PriceFormatter.format(lineTotal.toString(), currency: item.currency)}',
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -212,6 +215,7 @@ class _CartScreenState extends State<CartScreen> {
                                     children: [
                                       _QtyButton(
                                         icon: Icons.remove,
+                                        enabled: item.quantity > 1,
                                         onTap: () {
                                           context
                                               .read<CartController>()
@@ -269,11 +273,11 @@ class _CartScreenState extends State<CartScreen> {
                     borderRadius: const BorderRadius.vertical(
                       top: Radius.circular(24),
                     ),
-                    boxShadow: [
+                    boxShadow: const [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.06),
+                        color: AppColors.shadow,
                         blurRadius: 16,
-                        offset: const Offset(0, -4),
+                        offset: Offset(0, -4),
                       ),
                     ],
                   ),
@@ -346,25 +350,81 @@ class _CartScreenState extends State<CartScreen> {
   }
 }
 
+class _CartItemImage extends StatelessWidget {
+  const _CartItemImage({required this.imageUrl});
+
+  final String? imageUrl;
+
+  String? _resolveImageUrl(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return null;
+
+    final value = raw.trim();
+
+    if (value.startsWith('http://') || value.startsWith('https://')) {
+      return value;
+    }
+
+    if (value.startsWith('/')) {
+      return '${Env.baseUrl}$value';
+    }
+
+    return '${Env.baseUrl}/$value';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final resolvedUrl = _resolveImageUrl(imageUrl);
+
+    return Container(
+      width: 84,
+      height: 84,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F3F9),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: resolvedUrl == null
+          ? const Icon(Icons.image_outlined)
+          : Image.network(
+              resolvedUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) =>
+                  const Icon(Icons.broken_image_outlined),
+            ),
+    );
+  }
+}
+
 class _QtyButton extends StatelessWidget {
-  const _QtyButton({required this.icon, required this.onTap});
+  const _QtyButton({
+    required this.icon,
+    required this.onTap,
+    this.enabled = true,
+  });
 
   final IconData icon;
   final VoidCallback onTap;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: onTap,
+      onTap: enabled ? onTap : null,
       borderRadius: BorderRadius.circular(12),
       child: Ink(
         width: 34,
         height: 34,
         decoration: BoxDecoration(
-          color: const Color(0xFFF1F3F9),
+          color: enabled
+              ? const Color(0xFFF1F3F9)
+              : const Color(0xFFF1F3F9).withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(icon, size: 18),
+        child: Icon(
+          icon,
+          size: 18,
+          color: enabled ? Colors.black : Colors.black38,
+        ),
       ),
     );
   }

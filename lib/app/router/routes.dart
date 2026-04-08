@@ -6,6 +6,7 @@ class AppRoutes {
   static const register = '/register';
 
   static const buyerHome = '/buyer/home';
+  static const buyerCategories = '/buyer/categories';
   static const buyerCart = '/buyer/cart';
   static const buyerOrders = '/buyer/orders';
   static const buyerProfile = '/buyer/profile';
@@ -15,6 +16,10 @@ class AppRoutes {
   static const buyerOrderSuccess = '/buyer/order-success';
   static const buyerOrderDetails = '/buyer/order-details';
   static const editProfile = '/buyer/profile/edit';
+  static const buyerProductReviews = '/buyer/product-reviews';
+  static const buyerAddReview = '/buyer/add-review';
+  static const buyerCategoryDetails = '/buyer/category';
+  static const buyerFavorites = '/buyer/favorites';
 
   static const sellerDashboard = '/seller/dashboard';
   static const adminDashboard = '/admin/dashboard';

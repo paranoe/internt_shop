@@ -62,6 +62,9 @@ Future<Response> onRequest(RequestContext context, String id) async {
       final parameters = <dynamic>[];
       var index = 1;
 
+      int? newCategoryId;
+      int? newSubcategoryId;
+
       if (data.containsKey('name')) {
         final name = _toStringValue(data['name']);
         if (name.isEmpty) {
@@ -133,7 +136,21 @@ Future<Response> onRequest(RequestContext context, String id) async {
             body: {'error': 'category_id must be valid'},
           );
         }
+        newCategoryId = categoryId;
+      }
 
+      if (data.containsKey('subcategory_id')) {
+        final subcategoryId = _toInt(data['subcategory_id']);
+        if (subcategoryId <= 0) {
+          return Response.json(
+            statusCode: 400,
+            body: {'error': 'subcategory_id must be valid'},
+          );
+        }
+        newSubcategoryId = subcategoryId;
+      }
+
+      if (newCategoryId != null) {
         final categoryRows = await conn.execute(
           '''
           SELECT category_id
@@ -141,10 +158,10 @@ Future<Response> onRequest(RequestContext context, String id) async {
           WHERE category_id = \$1
           LIMIT 1
           ''',
-          parameters: [categoryId],
+          parameters: [newCategoryId],
         );
 
-        if (categoryRows.length == 0) {
+        if (categoryRows.isEmpty) {
           return Response.json(
             statusCode: 404,
             body: {'error': 'Category not found'},
@@ -152,7 +169,55 @@ Future<Response> onRequest(RequestContext context, String id) async {
         }
 
         updates.add('category_id = \$$index');
-        parameters.add(categoryId);
+        parameters.add(newCategoryId);
+        index++;
+      }
+
+      if (newSubcategoryId != null) {
+        int categoryForCheck = newCategoryId ?? 0;
+
+        if (categoryForCheck <= 0) {
+          final currentRows = await conn.execute(
+            '''
+            SELECT category_id
+            FROM products
+            WHERE product_id = \$1
+              AND seller_id = \$2
+            LIMIT 1
+            ''',
+            parameters: [productId, sellerId],
+          );
+
+          if (currentRows.isEmpty) {
+            return Response.json(
+              statusCode: 404,
+              body: {'error': 'Product not found'},
+            );
+          }
+
+          categoryForCheck = _toInt(currentRows.first[0]);
+        }
+
+        final subcategoryRows = await conn.execute(
+          '''
+          SELECT podcategories_id
+          FROM podcategories
+          WHERE podcategories_id = \$1
+            AND category_id = \$2
+          LIMIT 1
+          ''',
+          parameters: [newSubcategoryId, categoryForCheck],
+        );
+
+        if (subcategoryRows.isEmpty) {
+          return Response.json(
+            statusCode: 404,
+            body: {'error': 'Subcategory not found'},
+          );
+        }
+
+        updates.add('subcategory_id = \$$index');
+        parameters.add(newSubcategoryId);
         index++;
       }
 
@@ -180,6 +245,7 @@ Future<Response> onRequest(RequestContext context, String id) async {
           product_id,
           seller_id,
           category_id,
+          subcategory_id,
           name,
           description,
           price,
@@ -190,7 +256,7 @@ Future<Response> onRequest(RequestContext context, String id) async {
         parameters: parameters,
       );
 
-      if (updated.length == 0) {
+      if (updated.isEmpty) {
         return Response.json(
           statusCode: 404,
           body: {'error': 'Product not found'},
@@ -204,12 +270,13 @@ Future<Response> onRequest(RequestContext context, String id) async {
           'product_id': row[0],
           'seller_id': row[1],
           'category_id': row[2],
-          'name': row[3],
-          'description': row[4],
-          'price': row[5].toString(),
-          'currency': row[6],
-          'quantity': row[7],
-          'created_at': row[8]?.toString(),
+          'subcategory_id': row[3],
+          'name': row[4],
+          'description': row[5],
+          'price': row[6].toString(),
+          'currency': row[7],
+          'quantity': row[8],
+          'created_at': row[9]?.toString(),
         },
       );
 
@@ -224,7 +291,7 @@ Future<Response> onRequest(RequestContext context, String id) async {
         parameters: [productId, sellerId],
       );
 
-      if (deleted.length == 0) {
+      if (deleted.isEmpty) {
         return Response.json(
           statusCode: 404,
           body: {'error': 'Product not found'},

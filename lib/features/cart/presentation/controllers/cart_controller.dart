@@ -7,19 +7,24 @@ import 'package:diplomeprojectmobile/features/cart/domain/usecases/delete_cart_i
 import 'package:diplomeprojectmobile/features/cart/domain/usecases/get_cart_usecase.dart';
 import 'package:diplomeprojectmobile/features/cart/domain/usecases/update_cart_item_usecase.dart';
 import 'package:diplomeprojectmobile/features/cart/presentation/controllers/cart_state.dart';
+import 'package:diplomeprojectmobile/core/utils/error_mapper.dart';
 
 class CartController extends Cubit<CartState> {
   CartController({required CartApi cartApi})
-    : _getCart = GetCartUseCase(CartRepoImpl(cartApi)),
-      _addCartItem = AddCartItemUseCase(CartRepoImpl(cartApi)),
-      _updateCartItem = UpdateCartItemUseCase(CartRepoImpl(cartApi)),
-      _deleteCartItem = DeleteCartItemUseCase(CartRepoImpl(cartApi)),
+    : _getCart = GetCartUseCase(_buildRepo(cartApi)),
+      _addCartItem = AddCartItemUseCase(_buildRepo(cartApi)),
+      _updateCartItem = UpdateCartItemUseCase(_buildRepo(cartApi)),
+      _deleteCartItem = DeleteCartItemUseCase(_buildRepo(cartApi)),
       super(const CartState());
 
   final GetCartUseCase _getCart;
   final AddCartItemUseCase _addCartItem;
   final UpdateCartItemUseCase _updateCartItem;
   final DeleteCartItemUseCase _deleteCartItem;
+
+  static CartRepoImpl _buildRepo(CartApi cartApi) {
+    return CartRepoImpl(cartApi);
+  }
 
   Future<void> loadCart() async {
     emit(state.copyWith(status: CartStatus.loading, clearError: true));
@@ -36,7 +41,10 @@ class CartController extends Cubit<CartState> {
       );
     } catch (e) {
       emit(
-        state.copyWith(status: CartStatus.error, errorMessage: e.toString()),
+        state.copyWith(
+          status: CartStatus.error,
+          errorMessage: ErrorMapper.map(e),
+        ),
       );
     }
   }
@@ -47,7 +55,10 @@ class CartController extends Cubit<CartState> {
       await loadCart();
     } catch (e) {
       emit(
-        state.copyWith(status: CartStatus.error, errorMessage: e.toString()),
+        state.copyWith(
+          status: CartStatus.error,
+          errorMessage: ErrorMapper.map(e),
+        ),
       );
       rethrow;
     }
@@ -59,7 +70,10 @@ class CartController extends Cubit<CartState> {
       await loadCart();
     } catch (e) {
       emit(
-        state.copyWith(status: CartStatus.error, errorMessage: e.toString()),
+        state.copyWith(
+          status: CartStatus.error,
+          errorMessage: ErrorMapper.map(e),
+        ),
       );
     }
   }
@@ -67,7 +81,6 @@ class CartController extends Cubit<CartState> {
   Future<void> decreaseQty(int cartItemId, int currentQty) async {
     try {
       if (currentQty <= 1) {
-        await deleteItem(cartItemId);
         return;
       }
 
@@ -86,6 +99,28 @@ class CartController extends Cubit<CartState> {
       await loadCart();
     } catch (e) {
       emit(
+        state.copyWith(
+          status: CartStatus.error,
+          errorMessage: ErrorMapper.map(e),
+        ),
+      );
+    }
+  }
+
+  Future<void> decreaseOrRemoveFromProduct(
+    int cartItemId,
+    int currentQty,
+  ) async {
+    try {
+      if (currentQty <= 1) {
+        await deleteItem(cartItemId);
+        return;
+      }
+
+      await _updateCartItem(cartItemId: cartItemId, quantity: currentQty - 1);
+      await loadCart();
+    } catch (e) {
+      emit(
         state.copyWith(status: CartStatus.error, errorMessage: e.toString()),
       );
     }
@@ -97,7 +132,10 @@ class CartController extends Cubit<CartState> {
       await loadCart();
     } catch (e) {
       emit(
-        state.copyWith(status: CartStatus.error, errorMessage: e.toString()),
+        state.copyWith(
+          status: CartStatus.error,
+          errorMessage: ErrorMapper.map(e),
+        ),
       );
     }
   }

@@ -6,5 +6,7 @@ class GetOrdersUseCase {
 
   final OrdersRepo _repo;
 
-  Future<List<OrderEntity>> call() => _repo.getOrders();
+  Future<List<Order>> call() {
+    return _repo.getOrders();
+  }
 }

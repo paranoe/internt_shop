@@ -14,24 +14,28 @@ class OrdersState extends Equatable {
   });
 
   final OrdersStatus status;
-  final List<OrderEntity> orders;
-  final OrderEntity? selectedOrder;
+  final List<Order> orders;
+  final Order? selectedOrder;
   final List<OrderItemEntity> orderItems;
   final String? errorMessage;
 
   OrdersState copyWith({
     OrdersStatus? status,
-    List<OrderEntity>? orders,
-    OrderEntity? selectedOrder,
+    List<Order>? orders,
+    Order? selectedOrder,
     List<OrderItemEntity>? orderItems,
     String? errorMessage,
+    bool clearSelectedOrder = false,
+    bool clearOrderItems = false,
     bool clearError = false,
   }) {
     return OrdersState(
       status: status ?? this.status,
       orders: orders ?? this.orders,
-      selectedOrder: selectedOrder ?? this.selectedOrder,
-      orderItems: orderItems ?? this.orderItems,
+      selectedOrder: clearSelectedOrder
+          ? null
+          : (selectedOrder ?? this.selectedOrder),
+      orderItems: clearOrderItems ? const [] : (orderItems ?? this.orderItems),
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
     );
   }

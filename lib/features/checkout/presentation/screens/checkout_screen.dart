@@ -8,6 +8,8 @@ import 'package:diplomeprojectmobile/features/checkout/domain/entities/payment_m
 import 'package:diplomeprojectmobile/features/checkout/domain/entities/user_card.dart';
 import 'package:diplomeprojectmobile/features/checkout/presentation/controllers/checkout_controller.dart';
 import 'package:diplomeprojectmobile/features/checkout/presentation/controllers/checkout_state.dart';
+import 'package:diplomeprojectmobile/core/utils/price_formatter.dart';
+import 'package:diplomeprojectmobile/core/widgets/empty_state_view.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -16,9 +18,19 @@ class CheckoutScreen extends StatefulWidget {
   State<CheckoutScreen> createState() => _CheckoutScreenState();
 }
 
+String _paymentMethodText(String name) {
+  final value = name.trim().toLowerCase();
+
+  if (value == 'card') return 'Карта';
+  if (value == 'cash') return 'Наличные';
+  if (value == 'cash_on_pickup') return 'Наличными при получении';
+
+  return name;
+}
+
 class _CheckoutScreenState extends State<CheckoutScreen> {
-  static const int _minCardDigits = 12;
-  static const int _maxCardDigits = 19;
+  static const int _minCardDigits = 16;
+  static const int _maxCardDigits = 16;
 
   @override
   void initState() {
@@ -108,12 +120,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             return 'Введите номер карты';
                           }
 
-                          if (digits.length < _minCardDigits) {
-                            return 'Номер карты слишком короткий';
-                          }
-
-                          if (digits.length > _maxCardDigits) {
-                            return 'Слишком много цифр';
+                          if (digits.length != 16) {
+                            return 'Номер карты должен содержать 16 цифр';
                           }
 
                           return null;
@@ -258,9 +266,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               return Center(
                 child: Padding(
                   padding: const EdgeInsets.all(24),
-                  child: Text(
-                    state.errorMessage ?? 'Не удалось загрузить оформление',
-                    textAlign: TextAlign.center,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        state.errorMessage ?? 'Не удалось загрузить оформление',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton(
+                        onPressed: () {
+                          context.read<CheckoutController>().load();
+                        },
+                        child: const Text('Повторить'),
+                      ),
+                    ],
                   ),
                 ),
               );
@@ -269,6 +289,41 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             final preview = state.preview;
             if (preview == null) {
               return const Center(child: Text('Нет данных для оформления'));
+            }
+
+            if (preview.items.isEmpty) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.shopping_bag_outlined, size: 54),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Нет выбранных товаров для оформления',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Вернись в корзину и отметь товары, которые хочешь заказать.',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton(
+                        onPressed: () {
+                          context.pop();
+                        },
+                        child: const Text('Назад'),
+                      ),
+                    ],
+                  ),
+                ),
+              );
             }
 
             final cardPayment = _isCardMethod(state.selectedPaymentMethod);
@@ -371,7 +426,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         method.paymentMethodId;
 
                     return ChoiceChip(
-                      label: Text(method.name),
+                      label: Text(_paymentMethodText(method.name)),
                       selected: isSelected,
                       onSelected: (_) {
                         context.read<CheckoutController>().selectPaymentMethod(
@@ -434,10 +489,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         ),
                       ),
                       Text(
-                        '${preview.totalAmount} ${preview.currency}',
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
+                        PriceFormatter.format(
+                          preview.totalAmount,
+                          currency: preview.currency,
                         ),
                       ),
                     ],

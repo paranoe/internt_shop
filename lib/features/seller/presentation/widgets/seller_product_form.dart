@@ -4,34 +4,39 @@ class SellerProductForm extends StatelessWidget {
   const SellerProductForm({
     super.key,
     required this.formKey,
-    required this.groupItems,
-    required this.selectedGroup,
-    required this.onGroupChanged,
     required this.categories,
     required this.selectedCategoryId,
     required this.onCategoryChanged,
+    required this.subcategories,
+    required this.selectedSubcategoryId,
+    required this.onSubcategoryChanged,
     required this.nameController,
     required this.descriptionController,
     required this.priceController,
     required this.quantityController,
     required this.currencyController,
+    required this.parameters,
+    required this.parameterControllers,
   });
 
   final GlobalKey<FormState> formKey;
 
-  final List<String> groupItems;
-  final String? selectedGroup;
-  final ValueChanged<String?> onGroupChanged;
-
   final List<Map<String, dynamic>> categories;
   final int? selectedCategoryId;
   final ValueChanged<int?> onCategoryChanged;
+
+  final List<Map<String, dynamic>> subcategories;
+  final int? selectedSubcategoryId;
+  final ValueChanged<int?> onSubcategoryChanged;
 
   final TextEditingController nameController;
   final TextEditingController descriptionController;
   final TextEditingController priceController;
   final TextEditingController quantityController;
   final TextEditingController currencyController;
+
+  final List<Map<String, dynamic>> parameters;
+  final Map<int, TextEditingController> parameterControllers;
 
   int _categoryId(Map<String, dynamic> item) {
     return int.tryParse((item['category_id'] ?? item['id'] ?? '').toString()) ??
@@ -46,36 +51,60 @@ class SellerProductForm extends StatelessWidget {
         .toString();
   }
 
+  int _subcategoryId(Map<String, dynamic> item) {
+    return int.tryParse(
+          (item['subcategory_id'] ?? item['id'] ?? '').toString(),
+        ) ??
+        0;
+  }
+
+  String _subcategoryName(Map<String, dynamic> item) {
+    return (item['subcategory_name'] ??
+            item['name'] ??
+            item['title'] ??
+            'Подкатегория')
+        .toString();
+  }
+
+  String _parameterName(Map<String, dynamic> item) {
+    return (item['name'] ?? 'Параметр').toString();
+  }
+
+  String _parameterType(Map<String, dynamic> item) {
+    return (item['data_type'] ?? 'text').toString();
+  }
+
+  bool _isRequired(Map<String, dynamic> item) {
+    return item['is_required'] == true;
+  }
+
+  int _parameterId(Map<String, dynamic> item) {
+    return int.tryParse((item['parameter_id'] ?? '').toString()) ?? 0;
+  }
+
+  IconData _iconByType(String type) {
+    final value = type.toLowerCase();
+
+    if (value == 'number') return Icons.pin_outlined;
+    if (value == 'boolean') return Icons.toggle_on_outlined;
+
+    return Icons.tune_outlined;
+  }
+
+  TextInputType _keyboardByType(String type) {
+    final value = type.toLowerCase();
+    if (value == 'number') {
+      return const TextInputType.numberWithOptions(decimal: true);
+    }
+    return TextInputType.text;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Form(
       key: formKey,
       child: Column(
         children: [
-          DropdownButtonFormField<String>(
-            value: selectedGroup,
-            items: groupItems
-                .map(
-                  (group) => DropdownMenuItem<String>(
-                    value: group,
-                    child: Text(group),
-                  ),
-                )
-                .toList(),
-            onChanged: onGroupChanged,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: 'Группа категории',
-              prefixIcon: Icon(Icons.dashboard_customize_outlined),
-            ),
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Выберите группу категории';
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: 12),
           DropdownButtonFormField<int>(
             value: selectedCategoryId,
             items: categories
@@ -95,6 +124,30 @@ class SellerProductForm extends StatelessWidget {
             validator: (value) {
               if (value == null || value <= 0) {
                 return 'Выберите категорию';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<int>(
+            value: selectedSubcategoryId,
+            items: subcategories
+                .map(
+                  (item) => DropdownMenuItem<int>(
+                    value: _subcategoryId(item),
+                    child: Text(_subcategoryName(item)),
+                  ),
+                )
+                .toList(),
+            onChanged: subcategories.isEmpty ? null : onSubcategoryChanged,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'Подкатегория',
+              prefixIcon: Icon(Icons.grid_view_rounded),
+            ),
+            validator: (value) {
+              if (value == null || value <= 0) {
+                return 'Выберите подкатегорию';
               }
               return null;
             },
@@ -172,6 +225,69 @@ class SellerProductForm extends StatelessWidget {
               return null;
             },
           ),
+          if (selectedSubcategoryId != null) ...[
+            const SizedBox(height: 18),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Параметры подкатегории',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+            const SizedBox(height: 10),
+            if (parameters.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Text(
+                  'Для этой подкатегории параметры пока не заданы',
+                ),
+              )
+            else
+              ...parameters.map((parameter) {
+                final parameterId = _parameterId(parameter);
+                final controller = parameterControllers.putIfAbsent(
+                  parameterId,
+                  () => TextEditingController(),
+                );
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: TextFormField(
+                    controller: controller,
+                    keyboardType: _keyboardByType(_parameterType(parameter)),
+                    decoration: InputDecoration(
+                      labelText: _isRequired(parameter)
+                          ? '${_parameterName(parameter)} *'
+                          : _parameterName(parameter),
+                      hintText: 'Тип: ${_parameterType(parameter)}',
+                      prefixIcon: Icon(_iconByType(_parameterType(parameter))),
+                    ),
+                    validator: (value) {
+                      final text = (value ?? '').trim();
+
+                      if (_isRequired(parameter) && text.isEmpty) {
+                        return 'Заполните поле';
+                      }
+
+                      if (_parameterType(parameter).toLowerCase() == 'number' &&
+                          text.isNotEmpty &&
+                          num.tryParse(text.replaceAll(',', '.')) == null) {
+                        return 'Введите число';
+                      }
+
+                      return null;
+                    },
+                  ),
+                );
+              }),
+          ],
         ],
       ),
     );

@@ -7,7 +7,7 @@ class GetOrderDetailsUseCase {
 
   final OrdersRepo _repo;
 
-  Future<(OrderEntity, List<OrderItemEntity>)> call(int orderId) {
+  Future<(Order, List<OrderItemEntity>)> call(int orderId) {
     return _repo.getOrderDetails(orderId);
   }
 }

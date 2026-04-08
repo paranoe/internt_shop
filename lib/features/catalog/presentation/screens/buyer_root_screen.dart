@@ -1,8 +1,10 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:diplomeprojectmobile/app/router/routes.dart';
 import 'package:diplomeprojectmobile/app/theme/colors.dart';
+import 'package:diplomeprojectmobile/features/favorites/presentation/screens/favorites_screen.dart';
 
 class BuyerRootScreen extends StatelessWidget {
   const BuyerRootScreen({super.key, required this.child});
@@ -10,9 +12,10 @@ class BuyerRootScreen extends StatelessWidget {
   final Widget child;
 
   int _indexFromLocation(String location) {
-    if (location.startsWith(AppRoutes.buyerCart)) return 1;
-    if (location.startsWith(AppRoutes.buyerOrders)) return 2;
-    if (location.startsWith(AppRoutes.buyerProfile)) return 3;
+    if (location.startsWith(AppRoutes.buyerCategories)) return 1;
+    if (location.startsWith(AppRoutes.buyerCart)) return 2;
+    if (location.startsWith(AppRoutes.buyerOrders)) return 3;
+    if (location.startsWith(AppRoutes.buyerProfile)) return 4;
     return 0;
   }
 
@@ -29,32 +32,41 @@ class BuyerRootScreen extends StatelessWidget {
           boxShadow: [
             BoxShadow(
               color: AppColors.shadow,
-              blurRadius: 20,
-              offset: Offset(0, -6),
+              blurRadius: 24,
+              offset: Offset(0, -8),
             ),
           ],
         ),
         child: NavigationBar(
+          height: 74,
           selectedIndex: currentIndex,
+          backgroundColor: Colors.white,
+          indicatorColor: AppColors.primary.withValues(alpha: 0.12),
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
           destinations: const [
             NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home_rounded),
+              icon: Icon(CupertinoIcons.house, size: 22),
+              selectedIcon: Icon(CupertinoIcons.house_fill, size: 22),
               label: 'Главная',
             ),
             NavigationDestination(
-              icon: Icon(Icons.shopping_cart_outlined),
-              selectedIcon: Icon(Icons.shopping_cart_rounded),
+              icon: Icon(CupertinoIcons.square_grid_2x2, size: 22),
+              selectedIcon: Icon(CupertinoIcons.square_grid_2x2_fill, size: 22),
+              label: 'Категории',
+            ),
+            NavigationDestination(
+              icon: Icon(CupertinoIcons.cart, size: 22),
+              selectedIcon: Icon(CupertinoIcons.cart_fill, size: 22),
               label: 'Корзина',
             ),
             NavigationDestination(
-              icon: Icon(Icons.receipt_long_outlined),
-              selectedIcon: Icon(Icons.receipt_long_rounded),
+              icon: Icon(CupertinoIcons.doc_text, size: 22),
+              selectedIcon: Icon(CupertinoIcons.doc_text_fill, size: 22),
               label: 'Заказы',
             ),
             NavigationDestination(
-              icon: Icon(Icons.person_outline),
-              selectedIcon: Icon(Icons.person),
+              icon: Icon(CupertinoIcons.person, size: 22),
+              selectedIcon: Icon(CupertinoIcons.person_fill, size: 22),
               label: 'Профиль',
             ),
           ],
@@ -64,12 +76,15 @@ class BuyerRootScreen extends StatelessWidget {
                 context.go(AppRoutes.buyerHome);
                 break;
               case 1:
-                context.go(AppRoutes.buyerCart);
+                context.go(AppRoutes.buyerCategories);
                 break;
               case 2:
-                context.go(AppRoutes.buyerOrders);
+                context.go(AppRoutes.buyerCart);
                 break;
               case 3:
+                context.go(AppRoutes.buyerOrders);
+                break;
+              case 4:
                 context.go(AppRoutes.buyerProfile);
                 break;
             }

@@ -28,4 +28,6 @@ class ApiEndpoints {
   static const adminUsers = '/admin/users';
   static const adminOrders = '/admin/orders';
   static const adminPayments = '/admin/payments';
+
+  static const favorites = '/favorites';
 }

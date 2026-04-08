@@ -6,7 +6,7 @@ class CategoryModel extends Category {
   factory CategoryModel.fromJson(Map<String, dynamic> json) {
     return CategoryModel(
       categoryId: int.parse(json['category_id'].toString()),
-      categoryName: json['category_name']?.toString() ?? '',
+      categoryName: json['name']?.toString() ?? '',
     );
   }
 }

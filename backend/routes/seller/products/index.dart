@@ -48,6 +48,7 @@ Future<Response> onRequest(RequestContext context) async {
   switch (context.request.method) {
     case HttpMethod.get:
       final qp = context.request.uri.queryParameters;
+
       final page = _toInt(qp['page'], fallback: 1);
       final limit = _toInt(qp['limit'], fallback: 20);
       final q = _toStringValue(qp['q']);
@@ -74,6 +75,7 @@ Future<Response> onRequest(RequestContext context) async {
           product_id,
           seller_id,
           category_id,
+          subcategory_id,
           name,
           description,
           price,
@@ -100,12 +102,13 @@ Future<Response> onRequest(RequestContext context) async {
                   'product_id': row[0],
                   'seller_id': row[1],
                   'category_id': row[2],
-                  'name': row[3],
-                  'description': row[4],
-                  'price': row[5].toString(),
-                  'currency': row[6],
-                  'quantity': row[7],
-                  'created_at': row[8]?.toString(),
+                  'subcategory_id': row[3],
+                  'name': row[4],
+                  'description': row[5],
+                  'price': row[6].toString(),
+                  'currency': row[7],
+                  'quantity': row[8],
+                  'created_at': row[9]?.toString(),
                 },
               )
               .toList(),
@@ -117,6 +120,7 @@ Future<Response> onRequest(RequestContext context) async {
       final data = jsonDecode(raw) as Map<String, dynamic>;
 
       final categoryId = _toInt(data['category_id']);
+      final subcategoryId = _toInt(data['subcategory_id']);
       final name = _toStringValue(data['name']);
       final description = _toStringValue(data['description']);
       final priceRaw = _toStringValue(data['price']);
@@ -127,6 +131,13 @@ Future<Response> onRequest(RequestContext context) async {
         return Response.json(
           statusCode: 400,
           body: {'error': 'category_id is required'},
+        );
+      }
+
+      if (subcategoryId <= 0) {
+        return Response.json(
+          statusCode: 400,
+          body: {'error': 'subcategory_id is required'},
         );
       }
 
@@ -169,10 +180,28 @@ Future<Response> onRequest(RequestContext context) async {
         parameters: [categoryId],
       );
 
-      if (categoryRows.length == 0) {
+      if (categoryRows.isEmpty) {
         return Response.json(
           statusCode: 404,
           body: {'error': 'Category not found'},
+        );
+      }
+
+      final subcategoryRows = await conn.execute(
+        '''
+        SELECT podcategories_id
+        FROM podcategories
+        WHERE podcategories_id = \$1
+          AND category_id = \$2
+        LIMIT 1
+        ''',
+        parameters: [subcategoryId, categoryId],
+      );
+
+      if (subcategoryRows.isEmpty) {
+        return Response.json(
+          statusCode: 404,
+          body: {'error': 'Subcategory not found'},
         );
       }
 
@@ -181,17 +210,19 @@ Future<Response> onRequest(RequestContext context) async {
         INSERT INTO products (
           seller_id,
           category_id,
+          subcategory_id,
           name,
           description,
           price,
           currency,
           quantity
         )
-        VALUES (\$1, \$2, \$3, \$4, \$5::numeric, \$6, \$7)
+        VALUES (\$1, \$2, \$3, \$4, \$5, \$6::numeric, \$7, \$8)
         RETURNING
           product_id,
           seller_id,
           category_id,
+          subcategory_id,
           name,
           description,
           price,
@@ -202,6 +233,7 @@ Future<Response> onRequest(RequestContext context) async {
         parameters: [
           sellerId,
           categoryId,
+          subcategoryId,
           name,
           description.isEmpty ? null : description,
           normalizedPrice,
@@ -218,12 +250,13 @@ Future<Response> onRequest(RequestContext context) async {
           'product_id': row[0],
           'seller_id': row[1],
           'category_id': row[2],
-          'name': row[3],
-          'description': row[4],
-          'price': row[5].toString(),
-          'currency': row[6],
-          'quantity': row[7],
-          'created_at': row[8]?.toString(),
+          'subcategory_id': row[3],
+          'name': row[4],
+          'description': row[5],
+          'price': row[6].toString(),
+          'currency': row[7],
+          'quantity': row[8],
+          'created_at': row[9]?.toString(),
         },
       );
 

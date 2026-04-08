@@ -9,10 +9,14 @@ class OrdersRepoImpl implements OrdersRepo {
   final OrdersApi _api;
 
   @override
-  Future<List<OrderEntity>> getOrders() => _api.getOrders();
+  Future<List<Order>> getOrders() async {
+    final result = await _api.getOrders();
+    return result;
+  }
 
   @override
-  Future<(OrderEntity, List<OrderItemEntity>)> getOrderDetails(int orderId) {
-    return _api.getOrderDetails(orderId);
+  Future<(Order, List<OrderItemEntity>)> getOrderDetails(int orderId) async {
+    final result = await _api.getOrderDetails(orderId);
+    return result;
   }
 }

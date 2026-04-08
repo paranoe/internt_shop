@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:diplomeprojectmobile/app/router/guards.dart';
 
+import 'package:diplomeprojectmobile/app/router/guards.dart';
 import 'package:diplomeprojectmobile/app/router/routes.dart';
 import 'package:diplomeprojectmobile/app/theme/colors.dart';
 import 'package:diplomeprojectmobile/core/utils/validators.dart';
@@ -34,16 +34,10 @@ class _LoginScreenState extends State<LoginScreen> {
     final valid = _formKey.currentState?.validate() ?? false;
     if (!valid) return;
 
-    final ok = await context.read<AuthController>().login(
+    await context.read<AuthController>().login(
       email: _emailController.text.trim(),
       password: _passwordController.text.trim(),
     );
-
-    if (!mounted) return;
-    if (ok) {
-      final userRole = context.read<AuthController>().state.user?.role;
-      context.go(RouteGuards.homeByRole(userRole));
-    }
   }
 
   @override

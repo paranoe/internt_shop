@@ -8,6 +8,7 @@ class ProductDetails {
     this.categoryId,
     this.sellerId,
     this.mainImage,
+    this.canReview = false,
   });
 
   final int productId;
@@ -18,4 +19,5 @@ class ProductDetails {
   final int? categoryId;
   final int? sellerId;
   final String? mainImage;
+  final bool canReview;
 }

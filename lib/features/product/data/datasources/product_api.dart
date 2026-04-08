@@ -11,10 +11,16 @@ class ProductApi {
 
   final DioClient _dioClient;
 
+  List<dynamic> _extractItems(dynamic data) {
+    final map = Map<String, dynamic>.from(data as Map);
+    return map['items'] as List<dynamic>? ?? [];
+  }
+
   Future<ProductDetailsModel> getProductDetails(int productId) async {
     final response = await _dioClient.dio.get(
       '${ApiEndpoints.products}/$productId',
     );
+
     return ProductDetailsModel.fromJson(
       Map<String, dynamic>.from(response.data as Map),
     );
@@ -24,8 +30,9 @@ class ProductApi {
     final response = await _dioClient.dio.get(
       '${ApiEndpoints.products}/$productId/images',
     );
-    final data = Map<String, dynamic>.from(response.data as Map);
-    final items = (data['items'] as List<dynamic>? ?? []);
+
+    final items = _extractItems(response.data);
+
     return items
         .map(
           (e) =>
@@ -40,8 +47,9 @@ class ProductApi {
     final response = await _dioClient.dio.get(
       '${ApiEndpoints.products}/$productId/parameters',
     );
-    final data = Map<String, dynamic>.from(response.data as Map);
-    final items = (data['items'] as List<dynamic>? ?? []);
+
+    final items = _extractItems(response.data);
+
     return items
         .map(
           (e) => ProductParameterModel.fromJson(
@@ -55,8 +63,9 @@ class ProductApi {
     final response = await _dioClient.dio.get(
       '${ApiEndpoints.products}/$productId/reviews',
     );
-    final data = Map<String, dynamic>.from(response.data as Map);
-    final items = (data['items'] as List<dynamic>? ?? []);
+
+    final items = _extractItems(response.data);
+
     return items
         .map((e) => ReviewModel.fromJson(Map<String, dynamic>.from(e as Map)))
         .toList();

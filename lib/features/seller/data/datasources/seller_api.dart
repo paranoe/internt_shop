@@ -46,6 +46,24 @@ class SellerApi {
     return _extractItems(response.data);
   }
 
+  Future<List<Map<String, dynamic>>> getSubcategories(int categoryId) async {
+    final response = await _dioClient.dio.get(
+      '${ApiEndpoints.categories}/$categoryId/subcategories',
+    );
+    return _extractItems(response.data);
+  }
+
+  Future<List<Map<String, dynamic>>> getSubcategoryParameters({
+    required int categoryId,
+    required int subcategoryId,
+  }) async {
+    final response = await _dioClient.dio.get(
+      '${ApiEndpoints.categories}/$categoryId/subcategory_parameters',
+      queryParameters: {'subcategory_id': subcategoryId},
+    );
+    return _extractItems(response.data);
+  }
+
   Future<List<Map<String, dynamic>>> getProducts() async {
     final response = await _dioClient.dio.get(ApiEndpoints.sellerProducts);
     return _extractItems(response.data);
@@ -53,6 +71,7 @@ class SellerApi {
 
   Future<int?> createProduct({
     required int categoryId,
+    required int subcategoryId,
     required String name,
     String? description,
     required String price,
@@ -63,6 +82,7 @@ class SellerApi {
       ApiEndpoints.sellerProducts,
       data: {
         'category_id': categoryId,
+        'subcategory_id': subcategoryId,
         'name': name,
         'description': description,
         'price': num.tryParse(price.replaceAll(',', '.')) ?? price,
@@ -78,6 +98,7 @@ class SellerApi {
   Future<void> updateProduct({
     required int productId,
     int? categoryId,
+    int? subcategoryId,
     String? name,
     String? description,
     String? price,
@@ -88,6 +109,10 @@ class SellerApi {
 
     if (categoryId != null) {
       body['category_id'] = categoryId;
+    }
+
+    if (subcategoryId != null) {
+      body['subcategory_id'] = subcategoryId;
     }
 
     if (name != null) {

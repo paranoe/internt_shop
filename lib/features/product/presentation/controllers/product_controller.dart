@@ -6,20 +6,25 @@ import 'package:diplomeprojectmobile/features/product/domain/usecases/get_produc
 import 'package:diplomeprojectmobile/features/product/domain/usecases/get_product_images_usecase.dart';
 import 'package:diplomeprojectmobile/features/product/domain/usecases/get_product_parameters_usecase.dart';
 import 'package:diplomeprojectmobile/features/product/domain/usecases/get_product_reviews_usecase.dart';
+import 'package:diplomeprojectmobile/core/utils/error_mapper.dart';
 import 'product_state.dart';
 
 class ProductController extends Cubit<ProductState> {
   ProductController({required ProductApi productApi})
-    : _getDetails = GetProductDetailsUseCase(ProductRepoImpl(productApi)),
-      _getImages = GetProductImagesUseCase(ProductRepoImpl(productApi)),
-      _getParameters = GetProductParametersUseCase(ProductRepoImpl(productApi)),
-      _getReviews = GetProductReviewsUseCase(ProductRepoImpl(productApi)),
+    : _getDetails = GetProductDetailsUseCase(_buildRepo(productApi)),
+      _getImages = GetProductImagesUseCase(_buildRepo(productApi)),
+      _getParameters = GetProductParametersUseCase(_buildRepo(productApi)),
+      _getReviews = GetProductReviewsUseCase(_buildRepo(productApi)),
       super(const ProductState());
 
   final GetProductDetailsUseCase _getDetails;
   final GetProductImagesUseCase _getImages;
   final GetProductParametersUseCase _getParameters;
   final GetProductReviewsUseCase _getReviews;
+
+  static ProductRepoImpl _buildRepo(ProductApi productApi) {
+    return ProductRepoImpl(productApi);
+  }
 
   Future<void> load(int productId) async {
     emit(state.copyWith(status: ProductStatus.loading, clearError: true));
@@ -42,7 +47,10 @@ class ProductController extends Cubit<ProductState> {
       );
     } catch (e) {
       emit(
-        state.copyWith(status: ProductStatus.error, errorMessage: e.toString()),
+        state.copyWith(
+          status: ProductStatus.error,
+          errorMessage: ErrorMapper.map(e),
+        ),
       );
     }
   }

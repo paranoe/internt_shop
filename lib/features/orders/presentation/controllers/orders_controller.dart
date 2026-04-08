@@ -4,17 +4,20 @@ import 'package:diplomeprojectmobile/features/orders/data/repos/orders_repo_impl
 import 'package:diplomeprojectmobile/features/orders/domain/usecases/get_order_details_usecase.dart';
 import 'package:diplomeprojectmobile/features/orders/domain/usecases/get_orders_usecase.dart';
 import 'package:diplomeprojectmobile/features/orders/presentation/controllers/orders_state.dart';
+import 'package:diplomeprojectmobile/core/utils/error_mapper.dart';
 
 class OrdersController extends Cubit<OrdersState> {
   OrdersController({required OrdersApi ordersApi})
-    : _getOrdersUseCase = GetOrdersUseCase(OrdersRepoImpl(ordersApi)),
-      _getOrderDetailsUseCase = GetOrderDetailsUseCase(
-        OrdersRepoImpl(ordersApi),
-      ),
+    : _getOrdersUseCase = GetOrdersUseCase(_buildRepo(ordersApi)),
+      _getOrderDetailsUseCase = GetOrderDetailsUseCase(_buildRepo(ordersApi)),
       super(const OrdersState());
 
   final GetOrdersUseCase _getOrdersUseCase;
   final GetOrderDetailsUseCase _getOrderDetailsUseCase;
+
+  static OrdersRepoImpl _buildRepo(OrdersApi ordersApi) {
+    return OrdersRepoImpl(ordersApi);
+  }
 
   Future<void> loadOrders() async {
     emit(state.copyWith(status: OrdersStatus.loading, clearError: true));
@@ -30,7 +33,10 @@ class OrdersController extends Cubit<OrdersState> {
       );
     } catch (e) {
       emit(
-        state.copyWith(status: OrdersStatus.error, errorMessage: e.toString()),
+        state.copyWith(
+          status: OrdersStatus.error,
+          errorMessage: ErrorMapper.map(e),
+        ),
       );
     }
   }
@@ -60,7 +66,10 @@ class OrdersController extends Cubit<OrdersState> {
       );
     } catch (e) {
       emit(
-        state.copyWith(status: OrdersStatus.error, errorMessage: e.toString()),
+        state.copyWith(
+          status: OrdersStatus.error,
+          errorMessage: ErrorMapper.map(e),
+        ),
       );
     }
   }

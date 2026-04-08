@@ -8,6 +8,7 @@ import '../../domain/usecases/login_usecase.dart';
 import '../../domain/usecases/logout_usecase.dart';
 import '../../domain/usecases/refresh_session_usecase.dart';
 import '../../domain/usecases/register_usecase.dart';
+import 'package:diplomeprojectmobile/core/utils/error_mapper.dart';
 import 'auth_state.dart';
 
 class AuthController extends Cubit<AuthState> {
@@ -15,11 +16,11 @@ class AuthController extends Cubit<AuthState> {
     required SecureStorage secureStorage,
     required AuthApi authApi,
   }) : _secureStorage = secureStorage,
-       _loginUseCase = LoginUseCase(AuthRepoImpl(authApi)),
-       _registerUseCase = RegisterUseCase(AuthRepoImpl(authApi)),
-       _refreshSessionUseCase = RefreshSessionUseCase(AuthRepoImpl(authApi)),
-       _logoutUseCase = LogoutUseCase(AuthRepoImpl(authApi)),
-       _getMeUseCase = GetMeUseCase(AuthRepoImpl(authApi)),
+       _loginUseCase = LoginUseCase(_buildRepo(authApi)),
+       _registerUseCase = RegisterUseCase(_buildRepo(authApi)),
+       _refreshSessionUseCase = RefreshSessionUseCase(_buildRepo(authApi)),
+       _logoutUseCase = LogoutUseCase(_buildRepo(authApi)),
+       _getMeUseCase = GetMeUseCase(_buildRepo(authApi)),
        super(const AuthState());
 
   final SecureStorage _secureStorage;
@@ -29,26 +30,25 @@ class AuthController extends Cubit<AuthState> {
   final LogoutUseCase _logoutUseCase;
   final GetMeUseCase _getMeUseCase;
 
+  static AuthRepoImpl _buildRepo(AuthApi authApi) => AuthRepoImpl(authApi);
+
   Future<void> init() async {
     emit(state.copyWith(status: AuthStatus.loading, clearError: true));
 
     final access = await _secureStorage.getAccessToken();
     final refresh = await _secureStorage.getRefreshToken();
 
-    if ((access == null || access.isEmpty) &&
-        (refresh == null || refresh.isEmpty)) {
+    final hasAccess = access != null && access.isNotEmpty;
+    final hasRefresh = refresh != null && refresh.isNotEmpty;
+
+    if (!hasAccess && !hasRefresh) {
       emit(state.copyWith(status: AuthStatus.unauthenticated));
       return;
     }
 
     try {
-      if (access == null || access.isEmpty) {
-        if (refresh == null || refresh.isEmpty) {
-          emit(state.copyWith(status: AuthStatus.unauthenticated));
-          return;
-        }
-
-        final newAccess = await _refreshSessionUseCase(refreshToken: refresh);
+      if (!hasAccess) {
+        final newAccess = await _refreshSessionUseCase(refreshToken: refresh!);
 
         await _secureStorage.saveTokens(
           accessToken: newAccess,
@@ -57,6 +57,7 @@ class AuthController extends Cubit<AuthState> {
       }
 
       final me = await _getMeUseCase();
+
       emit(
         state.copyWith(
           status: AuthStatus.authenticated,
@@ -64,12 +65,36 @@ class AuthController extends Cubit<AuthState> {
           clearError: true,
         ),
       );
-    } catch (e) {
+    } catch (_) {
+      if (hasRefresh) {
+        try {
+          final newAccess = await _refreshSessionUseCase(
+            refreshToken: refresh!,
+          );
+
+          await _secureStorage.saveTokens(
+            accessToken: newAccess,
+            refreshToken: refresh,
+          );
+
+          final me = await _getMeUseCase();
+
+          emit(
+            state.copyWith(
+              status: AuthStatus.authenticated,
+              user: me,
+              clearError: true,
+            ),
+          );
+          return;
+        } catch (_) {}
+      }
+
       await _secureStorage.clearTokens();
       emit(
         state.copyWith(
           status: AuthStatus.unauthenticated,
-          errorMessage: e.toString(),
+          errorMessage: 'Сессия истекла. Войдите снова.',
         ),
       );
     }
@@ -99,7 +124,10 @@ class AuthController extends Cubit<AuthState> {
       return true;
     } catch (e) {
       emit(
-        state.copyWith(status: AuthStatus.error, errorMessage: e.toString()),
+        state.copyWith(
+          status: AuthStatus.error,
+          errorMessage: ErrorMapper.map(e),
+        ),
       );
       return false;
     }
@@ -139,7 +167,10 @@ class AuthController extends Cubit<AuthState> {
       return true;
     } catch (e) {
       emit(
-        state.copyWith(status: AuthStatus.error, errorMessage: e.toString()),
+        state.copyWith(
+          status: AuthStatus.error,
+          errorMessage: ErrorMapper.map(e),
+        ),
       );
       return false;
     }

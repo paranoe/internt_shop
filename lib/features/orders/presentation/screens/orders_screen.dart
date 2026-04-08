@@ -22,23 +22,46 @@ class _OrdersScreenState extends State<OrdersScreen> {
     });
   }
 
+  String _statusText(String status) {
+    final value = status.trim().toLowerCase();
+
+    if (value == 'created' || value.contains('new')) return 'Создан';
+    if (value == 'paid') return 'Оплачен';
+    if (value == 'delivered') return 'Доставлен';
+    if (value == 'cancelled' || value.contains('cancel')) return 'Отменён';
+    if (value.contains('deliver')) return 'Доставляется';
+
+    return status;
+  }
+
   Color _statusColor(String status) {
     final value = status.trim().toLowerCase();
 
-    if (value.contains('new') || value.contains('нов')) {
+    if (value == 'created' || value.contains('new')) {
       return Colors.blue;
     }
-    if (value.contains('paid') || value.contains('оплач')) {
+    if (value == 'paid') {
       return Colors.green;
     }
-    if (value.contains('cancel') || value.contains('отмен')) {
+    if (value == 'delivered') {
+      return Colors.teal;
+    }
+    if (value == 'cancelled' || value.contains('cancel')) {
       return Colors.red;
     }
-    if (value.contains('deliver') || value.contains('достав')) {
+    if (value.contains('deliver')) {
       return Colors.orange;
     }
 
     return Colors.grey;
+  }
+
+  String _formatDate(String raw) {
+    final dt = DateTime.tryParse(raw);
+    if (dt == null) return raw;
+
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${two(dt.day)}.${two(dt.month)}.${dt.year}';
   }
 
   @override
@@ -132,7 +155,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             borderRadius: BorderRadius.circular(999),
                           ),
                           child: Text(
-                            order.status,
+                            _statusText(order.status),
                             style: TextStyle(
                               color: statusColor,
                               fontWeight: FontWeight.w600,
@@ -140,9 +163,51 @@ class _OrdersScreenState extends State<OrdersScreen> {
                           ),
                         ),
                         const SizedBox(height: 10),
+                        if (order.previewItems.isNotEmpty) ...[
+                          SizedBox(
+                            height: 46,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: order.previewItems.length > 3
+                                  ? 3
+                                  : order.previewItems.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(width: 8),
+                              itemBuilder: (context, imageIndex) {
+                                final item = order.previewItems[imageIndex];
+
+                                return ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    width: 46,
+                                    height: 46,
+                                    color: const Color(0xFFF1F3F9),
+                                    child:
+                                        item.imageUrl == null ||
+                                            item.imageUrl!.isEmpty
+                                        ? const Icon(
+                                            Icons.image_outlined,
+                                            size: 20,
+                                          )
+                                        : Image.network(
+                                            item.imageUrl!,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) =>
+                                                const Icon(
+                                                  Icons.broken_image_outlined,
+                                                  size: 20,
+                                                ),
+                                          ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                        ],
                         Text('Сумма: ${order.totalAmount}'),
                         Text('Товаров: ${order.itemsCount}'),
-                        Text('Дата: ${order.createdAt}'),
+                        Text('Дата: ${_formatDate(order.createdAt)}'),
                       ],
                     ),
                     trailing: const Icon(Icons.chevron_right),

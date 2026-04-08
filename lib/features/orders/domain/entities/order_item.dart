@@ -8,6 +8,7 @@ class OrderItemEntity {
     required this.productId,
     required this.productName,
     required this.currency,
+    this.imageUrl,
   });
 
   final int orderItemId;
@@ -18,4 +19,5 @@ class OrderItemEntity {
   final int productId;
   final String productName;
   final String currency;
+  final String? imageUrl;
 }

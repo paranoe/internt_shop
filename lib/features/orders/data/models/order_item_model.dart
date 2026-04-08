@@ -10,28 +10,27 @@ class OrderItemModel extends OrderItemEntity {
     required super.productId,
     required super.productName,
     required super.currency,
+    super.imageUrl,
   });
 
-  static int _toInt(dynamic value) {
-    if (value == null) return 0;
-    return int.tryParse(value.toString()) ?? 0;
-  }
-
-  static int? _toNullableInt(dynamic value) {
-    if (value == null) return null;
-    return int.tryParse(value.toString());
-  }
-
   factory OrderItemModel.fromJson(Map<String, dynamic> json) {
+    final price = json['price_snapshot']?.toString() ?? '0';
+    final quantity = int.tryParse(json['quantity'].toString()) ?? 0;
+    final parsedPrice = double.tryParse(price) ?? 0;
+    final lineTotal = (parsedPrice * quantity).toStringAsFixed(2);
+
     return OrderItemModel(
-      orderItemId: _toInt(json['order_item_id']),
-      quantity: _toInt(json['quantity']),
-      priceSnapshot: json['price_snapshot']?.toString() ?? '0',
-      lineTotal: json['line_total']?.toString() ?? '0',
-      sourceCartItemId: _toNullableInt(json['source_cart_item_id']),
-      productId: _toInt(json['product_id']),
+      orderItemId: int.tryParse(json['order_item_id'].toString()) ?? 0,
+      quantity: quantity,
+      priceSnapshot: price,
+      lineTotal: lineTotal,
+      sourceCartItemId: json['source_cart_item_id'] == null
+          ? null
+          : int.tryParse(json['source_cart_item_id'].toString()),
+      productId: int.tryParse(json['product_id'].toString()) ?? 0,
       productName: json['product_name']?.toString() ?? '',
       currency: json['currency']?.toString() ?? '',
+      imageUrl: json['image_url']?.toString(),
     );
   }
 }
