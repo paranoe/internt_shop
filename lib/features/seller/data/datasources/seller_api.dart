@@ -53,13 +53,17 @@ class SellerApi {
     return _extractItems(response.data);
   }
 
+  Future<List<Map<String, dynamic>>> getMeasurementUnits() async {
+    final response = await _dioClient.dio.get('/measurement-units');
+    return _extractItems(response.data);
+  }
+
   Future<List<Map<String, dynamic>>> getSubcategoryParameters({
     required int categoryId,
     required int subcategoryId,
   }) async {
     final response = await _dioClient.dio.get(
-      '${ApiEndpoints.categories}/$categoryId/subcategory_parameters',
-      queryParameters: {'subcategory_id': subcategoryId},
+      '/subcategories/$subcategoryId/parameters',
     );
     return _extractItems(response.data);
   }

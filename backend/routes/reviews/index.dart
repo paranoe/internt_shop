@@ -4,6 +4,38 @@ import 'package:dart_frog/dart_frog.dart';
 import 'package:backend/src/core/security/auth_user.dart';
 import 'package:backend/src/db/postgres_pool.dart';
 
+const _bannedWords = <String>[
+  'хуй',
+  'пизда',
+  'ебал',
+  'ебать',
+  'ебан',
+  'сука',
+  'бляд',
+  'блять',
+  'нахуй',
+  'долбоеб',
+  'мудак',
+  'пиздец',
+  'хуйня',
+  'дерьмо',
+];
+
+String _normalize(String value) {
+  return value.toLowerCase().trim();
+}
+
+bool _containsBannedWords(String? comment) {
+  if (comment == null || comment.trim().isEmpty) return false;
+  final text = _normalize(comment);
+
+  for (final word in _bannedWords) {
+    if (text.contains(word)) return true;
+  }
+
+  return false;
+}
+
 Future<Response> onRequest(RequestContext context) async {
   if (context.request.method != HttpMethod.post) {
     return Response(statusCode: 405);
@@ -51,7 +83,6 @@ Future<Response> onRequest(RequestContext context) async {
     return Response.json(statusCode: 404, body: {'error': 'Product not found'});
   }
 
-  // Разрешаем отзыв только если buyer реально покупал этот товар
   final purchaseRows = await conn.execute(
     '''
     SELECT 1
@@ -73,6 +104,9 @@ Future<Response> onRequest(RequestContext context) async {
     );
   }
 
+  final moderationStatus =
+      _containsBannedWords(comment) ? 'pending' : 'approved';
+
   final existingRows = await conn.execute(
     '''
     SELECT review_id
@@ -90,10 +124,11 @@ Future<Response> onRequest(RequestContext context) async {
       '''
       UPDATE reviews
       SET rating = \$1,
-          comment = \$2
-      WHERE review_id = \$3
+          comment = \$2,
+          moderation_status = \$3
+      WHERE review_id = \$4
       ''',
-      parameters: [rating, comment, reviewId],
+      parameters: [rating, comment, moderationStatus, reviewId],
     );
 
     return Response.json(
@@ -102,6 +137,7 @@ Future<Response> onRequest(RequestContext context) async {
         'product_id': productId,
         'rating': rating,
         'comment': comment,
+        'moderation_status': moderationStatus,
         'updated': true,
       },
     );
@@ -109,11 +145,18 @@ Future<Response> onRequest(RequestContext context) async {
 
   final inserted = await conn.execute(
     '''
-    INSERT INTO reviews (buyer_id, product_id, rating, comment, created_at)
-    VALUES (\$1, \$2, \$3, \$4, now())
+    INSERT INTO reviews (
+      buyer_id,
+      product_id,
+      rating,
+      comment,
+      created_at,
+      moderation_status
+    )
+    VALUES (\$1, \$2, \$3, \$4, now(), \$5)
     RETURNING review_id
     ''',
-    parameters: [auth.userId, productId, rating, comment],
+    parameters: [auth.userId, productId, rating, comment, moderationStatus],
   );
 
   return Response.json(
@@ -123,6 +166,7 @@ Future<Response> onRequest(RequestContext context) async {
       'product_id': productId,
       'rating': rating,
       'comment': comment,
+      'moderation_status': moderationStatus,
       'updated': false,
     },
   );

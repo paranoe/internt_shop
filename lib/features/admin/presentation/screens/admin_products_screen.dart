@@ -43,18 +43,26 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
     });
   }
 
+  String _categoryLabel(Map<String, dynamic> item) {
+    return item['category_name']?.toString() ??
+        item['name']?.toString() ??
+        'Категория';
+  }
+
+  String _subcategoryLabel(Map<String, dynamic> item) {
+    return item['subcategory_name']?.toString() ??
+        item['name']?.toString() ??
+        'Подкатегория';
+  }
+
   Future<void> _showProductDialog({Map<String, dynamic>? product}) async {
     final isEdit = product != null;
     final formKey = GlobalKey<FormState>();
 
-    final categoryController = TextEditingController(
-      text: product?['category_id']?.toString() ?? '',
-    );
+    final state = context.read<AdminController>().state;
+
     final sellerController = TextEditingController(
       text: product?['seller_id']?.toString() ?? '',
-    );
-    final subcategoryController = TextEditingController(
-      text: product?['subcategory_id']?.toString() ?? '',
     );
     final nameController = TextEditingController(
       text: product?['name']?.toString() ?? '',
@@ -72,188 +80,431 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
       text: product?['currency']?.toString() ?? 'BYN',
     );
 
+    int? selectedCategoryId = product == null
+        ? null
+        : int.tryParse(product['category_id'].toString());
+    int? selectedSubcategoryId = product == null
+        ? null
+        : int.tryParse(product['subcategory_id'].toString());
+
+    final parameterControllers = <int, TextEditingController>{};
+
+    if (selectedCategoryId != null && selectedCategoryId > 0) {
+      await context.read<AdminController>().loadSubcategoriesByCategory(
+        selectedCategoryId,
+      );
+    }
+
+    if (selectedSubcategoryId != null && selectedSubcategoryId > 0) {
+      await context.read<AdminController>().loadProductParametersBySubcategory(
+        selectedSubcategoryId,
+      );
+    }
+
     final done =
         await showModalBottomSheet<bool>(
           context: context,
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
           builder: (sheetContext) {
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
-              ),
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-                decoration: BoxDecoration(
-                  color: Theme.of(sheetContext).scaffoldBackgroundColor,
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(28),
-                  ),
-                ),
-                child: SingleChildScrollView(
-                  child: Form(
-                    key: formKey,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Center(
-                          child: Container(
-                            width: 42,
-                            height: 4,
-                            decoration: BoxDecoration(
-                              color: Colors.black26,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            isEdit ? 'Редактировать товар' : 'Создать товар',
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        _field(
-                          controller: categoryController,
-                          label: 'category_id',
-                          icon: Icons.category_outlined,
-                          keyboardType: TextInputType.number,
-                        ),
-                        const SizedBox(height: 12),
-                        _field(
-                          controller: subcategoryController,
-                          label: 'subcategory_id',
-                          icon: Icons.grid_view_rounded,
-                          keyboardType: TextInputType.number,
-                        ),
-                        const SizedBox(height: 12),
-                        _field(
-                          controller: sellerController,
-                          label: 'seller_id',
-                          icon: Icons.storefront_outlined,
-                          keyboardType: TextInputType.number,
-                        ),
-                        const SizedBox(height: 12),
-                        _field(
-                          controller: nameController,
-                          label: 'Название',
-                          icon: Icons.inventory_2_outlined,
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: descriptionController,
-                          minLines: 3,
-                          maxLines: 5,
-                          decoration: InputDecoration(
-                            labelText: 'Описание',
-                            alignLabelWithHint: true,
-                            prefixIcon: const Icon(Icons.description_outlined),
-                            filled: true,
-                            fillColor: Colors.grey.shade100,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(18),
-                              borderSide: BorderSide.none,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        _field(
-                          controller: priceController,
-                          label: 'Цена',
-                          icon: Icons.payments_outlined,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        _field(
-                          controller: quantityController,
-                          label: 'Количество',
-                          icon: Icons.format_list_numbered,
-                          keyboardType: TextInputType.number,
-                        ),
-                        const SizedBox(height: 12),
-                        _field(
-                          controller: currencyController,
-                          label: 'Валюта',
-                          icon: Icons.currency_exchange_outlined,
-                        ),
-                        const SizedBox(height: 18),
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton(
-                            onPressed: () async {
-                              if (!formKey.currentState!.validate()) return;
+            return StatefulBuilder(
+              builder: (context, setModalState) {
+                return BlocBuilder<AdminController, AdminState>(
+                  builder: (context, state) {
+                    final categories = state.categories;
+                    final subcategories = state.subcategories;
+                    final productParameters = state.productParameters;
 
-                              final categoryId =
-                                  int.tryParse(
-                                    categoryController.text.trim(),
-                                  ) ??
-                                  0;
-                              final subcategoryId =
-                                  int.tryParse(
-                                    subcategoryController.text.trim(),
-                                  ) ??
-                                  0;
-                              final sellerId =
-                                  int.tryParse(sellerController.text.trim()) ??
-                                  0;
-                              final quantity =
-                                  int.tryParse(
-                                    quantityController.text.trim(),
-                                  ) ??
-                                  0;
+                    for (final parameter in productParameters) {
+                      final parameterId =
+                          int.tryParse(parameter['parameter_id'].toString()) ??
+                          0;
 
-                              bool ok;
-                              if (isEdit) {
-                                ok = await context
-                                    .read<AdminController>()
-                                    .updateProduct(
-                                      productId: int.parse(
-                                        product['product_id'].toString(),
+                      parameterControllers.putIfAbsent(
+                        parameterId,
+                        () => TextEditingController(),
+                      );
+                    }
+
+                    return Padding(
+                      padding: EdgeInsets.only(
+                        bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+                      ),
+                      child: Container(
+                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+                        decoration: BoxDecoration(
+                          color: Theme.of(sheetContext).scaffoldBackgroundColor,
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(28),
+                          ),
+                        ),
+                        child: SingleChildScrollView(
+                          child: Form(
+                            key: formKey,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Center(
+                                  child: Container(
+                                    width: 42,
+                                    height: 4,
+                                    decoration: BoxDecoration(
+                                      color: Colors.black26,
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    isEdit
+                                        ? 'Редактировать товар'
+                                        : 'Создать товар',
+                                    style: const TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+
+                                DropdownButtonFormField<int>(
+                                  value: selectedCategoryId,
+                                  decoration: _dropdownDecoration(
+                                    'Категория',
+                                    Icons.category_outlined,
+                                  ),
+                                  items: categories.map((item) {
+                                    final id =
+                                        int.tryParse(
+                                          item['category_id'].toString(),
+                                        ) ??
+                                        0;
+                                    return DropdownMenuItem<int>(
+                                      value: id,
+                                      child: Text(_categoryLabel(item)),
+                                    );
+                                  }).toList(),
+                                  validator: (value) {
+                                    if (value == null || value <= 0) {
+                                      return 'Выберите категорию';
+                                    }
+                                    return null;
+                                  },
+                                  onChanged: (value) async {
+                                    if (value == null) return;
+
+                                    setModalState(() {
+                                      selectedCategoryId = value;
+                                      selectedSubcategoryId = null;
+                                    });
+
+                                    await context
+                                        .read<AdminController>()
+                                        .loadSubcategoriesByCategory(value);
+
+                                    emitEmptyParameters(context);
+                                  },
+                                ),
+                                const SizedBox(height: 12),
+
+                                DropdownButtonFormField<int>(
+                                  value: selectedSubcategoryId,
+                                  decoration: _dropdownDecoration(
+                                    'Подкатегория',
+                                    Icons.grid_view_rounded,
+                                  ),
+                                  items: subcategories.map((item) {
+                                    final id =
+                                        int.tryParse(
+                                          (item['subcategory_id'] ??
+                                                  item['podcategories_id'])
+                                              .toString(),
+                                        ) ??
+                                        0;
+                                    return DropdownMenuItem<int>(
+                                      value: id,
+                                      child: Text(_subcategoryLabel(item)),
+                                    );
+                                  }).toList(),
+                                  validator: (value) {
+                                    if (value == null || value <= 0) {
+                                      return 'Выберите подкатегорию';
+                                    }
+                                    return null;
+                                  },
+                                  onChanged: subcategories.isEmpty
+                                      ? null
+                                      : (value) async {
+                                          if (value == null) return;
+
+                                          setModalState(() {
+                                            selectedSubcategoryId = value;
+                                          });
+
+                                          await context
+                                              .read<AdminController>()
+                                              .loadProductParametersBySubcategory(
+                                                value,
+                                              );
+                                        },
+                                ),
+                                const SizedBox(height: 12),
+
+                                _field(
+                                  controller: sellerController,
+                                  label: 'seller_id',
+                                  icon: Icons.storefront_outlined,
+                                  keyboardType: TextInputType.number,
+                                ),
+                                const SizedBox(height: 12),
+                                _field(
+                                  controller: nameController,
+                                  label: 'Название',
+                                  icon: Icons.inventory_2_outlined,
+                                ),
+                                const SizedBox(height: 12),
+                                TextFormField(
+                                  controller: descriptionController,
+                                  minLines: 3,
+                                  maxLines: 5,
+                                  decoration: InputDecoration(
+                                    labelText: 'Описание',
+                                    alignLabelWithHint: true,
+                                    prefixIcon: const Icon(
+                                      Icons.description_outlined,
+                                    ),
+                                    filled: true,
+                                    fillColor: Colors.grey.shade100,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(18),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                _field(
+                                  controller: priceController,
+                                  label: 'Цена',
+                                  icon: Icons.payments_outlined,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
                                       ),
-                                      categoryId: categoryId,
-                                      subcategoryId: subcategoryId,
-                                      sellerId: sellerId,
-                                      name: nameController.text.trim(),
-                                      description: descriptionController.text
-                                          .trim(),
-                                      price: priceController.text.trim(),
-                                      quantity: quantity,
-                                      currency: currencyController.text.trim(),
-                                    );
-                              } else {
-                                ok = await context
-                                    .read<AdminController>()
-                                    .createProduct(
-                                      categoryId: categoryId,
-                                      subcategoryId: subcategoryId,
-                                      sellerId: sellerId,
-                                      name: nameController.text.trim(),
-                                      description: descriptionController.text
-                                          .trim(),
-                                      price: priceController.text.trim(),
-                                      quantity: quantity,
-                                      currency: currencyController.text.trim(),
-                                    );
-                              }
+                                ),
+                                const SizedBox(height: 12),
+                                _field(
+                                  controller: quantityController,
+                                  label: 'Количество',
+                                  icon: Icons.format_list_numbered,
+                                  keyboardType: TextInputType.number,
+                                ),
+                                const SizedBox(height: 12),
+                                _field(
+                                  controller: currencyController,
+                                  label: 'Валюта',
+                                  icon: Icons.currency_exchange_outlined,
+                                ),
 
-                              if (!mounted) return;
-                              Navigator.of(sheetContext).pop(ok);
-                            },
-                            child: Text(isEdit ? 'Сохранить' : 'Создать'),
+                                if (productParameters.isNotEmpty) ...[
+                                  const SizedBox(height: 20),
+                                  const Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      'Параметры товара',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  ...productParameters.map((parameter) {
+                                    final parameterId =
+                                        int.tryParse(
+                                          parameter['parameter_id'].toString(),
+                                        ) ??
+                                        0;
+                                    final parameterName =
+                                        parameter['name']?.toString() ??
+                                        'Параметр';
+                                    final dataType =
+                                        parameter['data_type']?.toString() ??
+                                        'text';
+                                    final unitShortName =
+                                        parameter['unit_short_name']
+                                            ?.toString() ??
+                                        '';
+
+                                    final controller =
+                                        parameterControllers[parameterId]!;
+
+                                    return Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: 12,
+                                      ),
+                                      child: TextFormField(
+                                        controller: controller,
+                                        keyboardType: dataType == 'number'
+                                            ? const TextInputType.numberWithOptions(
+                                                decimal: true,
+                                              )
+                                            : TextInputType.text,
+                                        validator: (value) {
+                                          final text = (value ?? '').trim();
+                                          if (text.isEmpty) {
+                                            return 'Заполните поле';
+                                          }
+
+                                          if (dataType == 'number' &&
+                                              double.tryParse(
+                                                    text.replaceAll(',', '.'),
+                                                  ) ==
+                                                  null) {
+                                            return 'Введите число';
+                                          }
+
+                                          return null;
+                                        },
+                                        decoration: InputDecoration(
+                                          labelText: parameterName,
+                                          suffixText: unitShortName.isEmpty
+                                              ? null
+                                              : unitShortName,
+                                          prefixIcon: const Icon(
+                                            Icons.tune_outlined,
+                                          ),
+                                          filled: true,
+                                          fillColor: Colors.grey.shade100,
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              18,
+                                            ),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                ],
+
+                                const SizedBox(height: 18),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: FilledButton(
+                                    onPressed: () async {
+                                      if (!formKey.currentState!.validate()) {
+                                        return;
+                                      }
+
+                                      final categoryId =
+                                          selectedCategoryId ?? 0;
+                                      final subcategoryId =
+                                          selectedSubcategoryId ?? 0;
+                                      final sellerId =
+                                          int.tryParse(
+                                            sellerController.text.trim(),
+                                          ) ??
+                                          0;
+                                      final quantity =
+                                          int.tryParse(
+                                            quantityController.text.trim(),
+                                          ) ??
+                                          0;
+
+                                      final parameterValues = productParameters
+                                          .map((parameter) {
+                                            final parameterId =
+                                                int.tryParse(
+                                                  parameter['parameter_id']
+                                                      .toString(),
+                                                ) ??
+                                                0;
+                                            final dataType =
+                                                parameter['data_type']
+                                                    ?.toString() ??
+                                                'text';
+                                            final value =
+                                                parameterControllers[parameterId]
+                                                    ?.text
+                                                    .trim() ??
+                                                '';
+
+                                            return {
+                                              'parameter_id': parameterId,
+                                              'data_type': dataType,
+                                              'value': value,
+                                            };
+                                          })
+                                          .where(
+                                            (item) =>
+                                                item['parameter_id'] != 0 &&
+                                                (item['value'] as String)
+                                                    .isNotEmpty,
+                                          )
+                                          .toList();
+
+                                      bool ok;
+                                      if (isEdit) {
+                                        ok = await context
+                                            .read<AdminController>()
+                                            .updateProduct(
+                                              productId: int.parse(
+                                                product['product_id']
+                                                    .toString(),
+                                              ),
+                                              categoryId: categoryId,
+                                              subcategoryId: subcategoryId,
+                                              sellerId: sellerId,
+                                              name: nameController.text.trim(),
+                                              description: descriptionController
+                                                  .text
+                                                  .trim(),
+                                              price: priceController.text
+                                                  .trim(),
+                                              quantity: quantity,
+                                              currency: currencyController.text
+                                                  .trim(),
+                                              parameterValues: parameterValues,
+                                            );
+                                      } else {
+                                        ok = await context
+                                            .read<AdminController>()
+                                            .createProduct(
+                                              categoryId: categoryId,
+                                              subcategoryId: subcategoryId,
+                                              sellerId: sellerId,
+                                              name: nameController.text.trim(),
+                                              description: descriptionController
+                                                  .text
+                                                  .trim(),
+                                              price: priceController.text
+                                                  .trim(),
+                                              quantity: quantity,
+                                              currency: currencyController.text
+                                                  .trim(),
+                                              parameterValues: parameterValues,
+                                            );
+                                      }
+
+                                      if (!mounted) return;
+                                      Navigator.of(sheetContext).pop(ok);
+                                    },
+                                    child: Text(
+                                      isEdit ? 'Сохранить' : 'Создать',
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+                      ),
+                    );
+                  },
+                );
+              },
             );
           },
         ) ??
@@ -273,6 +524,14 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
         ).showSnackBar(SnackBar(content: Text(error)));
       }
     }
+  }
+
+  void emitEmptyParameters(BuildContext context) {
+    context.read<AdminController>().emit(
+      context.read<AdminController>().state.copyWith(
+        productParameters: const [],
+      ),
+    );
   }
 
   Future<void> _confirmDelete(int productId, String name) async {
@@ -331,6 +590,19 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
           borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide.none,
         ),
+      ),
+    );
+  }
+
+  static InputDecoration _dropdownDecoration(String label, IconData icon) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon),
+      filled: true,
+      fillColor: Colors.grey.shade100,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide.none,
       ),
     );
   }

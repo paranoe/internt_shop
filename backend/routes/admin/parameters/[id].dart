@@ -34,6 +34,10 @@ Future<Response> onRequest(RequestContext context, String id) async {
       final parameters = <dynamic>[];
       var index = 1;
 
+      String? nextDataType;
+      int? nextUnitId;
+      bool unitChanged = false;
+
       if (data.containsKey('name')) {
         final name = _toStringValue(data['name']);
         if (name.isEmpty) {
@@ -77,8 +81,38 @@ Future<Response> onRequest(RequestContext context, String id) async {
           );
         }
 
+        nextDataType = dataType;
         updates.add('data_type = \$$index');
         parameters.add(dataType);
+        index++;
+      }
+
+      if (data.containsKey('unit_id')) {
+        unitChanged = true;
+        nextUnitId = data['unit_id'] == null ? null : _toInt(data['unit_id']);
+
+        if (nextUnitId != null && nextUnitId! > 0) {
+          final unitRows = await conn.execute(
+            '''
+            SELECT unit_id
+            FROM measurement_units
+            WHERE unit_id = \$1
+            LIMIT 1
+            ''',
+            parameters: [nextUnitId],
+          );
+
+          if (unitRows.length == 0) {
+            return Response.json(
+              statusCode: 404,
+              body: {'error': 'Measurement unit not found'},
+            );
+          }
+        }
+
+        updates.add('unit_id = \$$index');
+        parameters
+            .add((nextUnitId != null && nextUnitId! > 0) ? nextUnitId : null);
         index++;
       }
 
@@ -89,6 +123,22 @@ Future<Response> onRequest(RequestContext context, String id) async {
         );
       }
 
+      if (nextDataType != null) {
+        final unitToCheck = unitChanged ? nextUnitId : null;
+        if (nextDataType != 'number' &&
+            unitToCheck != null &&
+            unitToCheck > 0) {
+          return Response.json(
+            statusCode: 400,
+            body: {'error': 'unit_id is allowed only for number type'},
+          );
+        }
+
+        if (nextDataType != 'number' && !unitChanged) {
+          updates.add('unit_id = NULL');
+        }
+      }
+
       parameters.add(parameterId);
 
       final updated = await conn.execute(
@@ -96,7 +146,7 @@ Future<Response> onRequest(RequestContext context, String id) async {
         UPDATE parameters
         SET ${updates.join(', ')}
         WHERE parameter_id = \$$index
-        RETURNING parameter_id, name, data_type
+        RETURNING parameter_id, name, data_type, unit_id
         ''',
         parameters: parameters,
       );
@@ -115,6 +165,7 @@ Future<Response> onRequest(RequestContext context, String id) async {
           'parameter_id': row[0],
           'name': row[1],
           'data_type': row[2],
+          'unit_id': row[3],
         },
       );
 

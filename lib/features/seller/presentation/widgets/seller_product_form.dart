@@ -38,65 +38,61 @@ class SellerProductForm extends StatelessWidget {
   final List<Map<String, dynamic>> parameters;
   final Map<int, TextEditingController> parameterControllers;
 
-  int _categoryId(Map<String, dynamic> item) {
-    return int.tryParse((item['category_id'] ?? item['id'] ?? '').toString()) ??
-        0;
-  }
-
   String _categoryName(Map<String, dynamic> item) {
-    return (item['category_name'] ??
-            item['name'] ??
-            item['title'] ??
-            'Категория')
-        .toString();
-  }
-
-  int _subcategoryId(Map<String, dynamic> item) {
-    return int.tryParse(
-          (item['subcategory_id'] ?? item['id'] ?? '').toString(),
-        ) ??
-        0;
+    return item['category_name']?.toString() ??
+        item['name']?.toString() ??
+        'Категория';
   }
 
   String _subcategoryName(Map<String, dynamic> item) {
-    return (item['subcategory_name'] ??
-            item['name'] ??
-            item['title'] ??
-            'Подкатегория')
-        .toString();
+    return item['subcategory_name']?.toString() ??
+        item['name']?.toString() ??
+        'Подкатегория';
   }
 
-  String _parameterName(Map<String, dynamic> item) {
-    return (item['name'] ?? 'Параметр').toString();
+  InputDecoration _decoration({
+    required String label,
+    required IconData icon,
+    String? suffixText,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon),
+      suffixText: suffixText,
+      filled: true,
+      fillColor: Colors.grey.shade100,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide.none,
+      ),
+    );
   }
 
-  String _parameterType(Map<String, dynamic> item) {
-    return (item['data_type'] ?? 'text').toString();
-  }
-
-  bool _isRequired(Map<String, dynamic> item) {
-    return item['is_required'] == true;
-  }
-
-  int _parameterId(Map<String, dynamic> item) {
-    return int.tryParse((item['parameter_id'] ?? '').toString()) ?? 0;
-  }
-
-  IconData _iconByType(String type) {
-    final value = type.toLowerCase();
-
-    if (value == 'number') return Icons.pin_outlined;
-    if (value == 'boolean') return Icons.toggle_on_outlined;
-
-    return Icons.tune_outlined;
-  }
-
-  TextInputType _keyboardByType(String type) {
-    final value = type.toLowerCase();
-    if (value == 'number') {
-      return const TextInputType.numberWithOptions(decimal: true);
-    }
-    return TextInputType.text;
+  Widget _textField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType? keyboardType,
+    int maxLines = 1,
+    int minLines = 1,
+    String? suffixText,
+    String? Function(String?)? validator,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      minLines: minLines,
+      validator:
+          validator ??
+          (value) {
+            if ((value ?? '').trim().isEmpty) {
+              return 'Заполните поле';
+            }
+            return null;
+          },
+      decoration: _decoration(label: label, icon: icon, suffixText: suffixText),
+    );
   }
 
   @override
@@ -107,186 +103,185 @@ class SellerProductForm extends StatelessWidget {
         children: [
           DropdownButtonFormField<int>(
             value: selectedCategoryId,
-            items: categories
-                .map(
-                  (item) => DropdownMenuItem<int>(
-                    value: _categoryId(item),
-                    child: Text(_categoryName(item)),
-                  ),
-                )
-                .toList(),
+            items: categories.map((category) {
+              final id = int.tryParse(category['category_id'].toString()) ?? 0;
+              return DropdownMenuItem<int>(
+                value: id,
+                child: Text(_categoryName(category)),
+              );
+            }).toList(),
             onChanged: onCategoryChanged,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: 'Категория',
-              prefixIcon: Icon(Icons.category_outlined),
-            ),
             validator: (value) {
               if (value == null || value <= 0) {
                 return 'Выберите категорию';
               }
               return null;
             },
+            decoration: _decoration(
+              label: 'Категория',
+              icon: Icons.category_outlined,
+            ),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<int>(
             value: selectedSubcategoryId,
-            items: subcategories
-                .map(
-                  (item) => DropdownMenuItem<int>(
-                    value: _subcategoryId(item),
-                    child: Text(_subcategoryName(item)),
-                  ),
-                )
-                .toList(),
-            onChanged: subcategories.isEmpty ? null : onSubcategoryChanged,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: 'Подкатегория',
-              prefixIcon: Icon(Icons.grid_view_rounded),
-            ),
+            items: subcategories.map((subcategory) {
+              final id =
+                  int.tryParse(
+                    (subcategory['subcategory_id'] ??
+                            subcategory['podcategories_id'])
+                        .toString(),
+                  ) ??
+                  0;
+              return DropdownMenuItem<int>(
+                value: id,
+                child: Text(_subcategoryName(subcategory)),
+              );
+            }).toList(),
+            onChanged: onSubcategoryChanged,
             validator: (value) {
               if (value == null || value <= 0) {
                 return 'Выберите подкатегорию';
               }
               return null;
             },
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: nameController,
-            decoration: const InputDecoration(
-              labelText: 'Название товара',
-              prefixIcon: Icon(Icons.inventory_2_outlined),
+            decoration: _decoration(
+              label: 'Подкатегория',
+              icon: Icons.grid_view_rounded,
             ),
-            validator: (value) {
-              final text = (value ?? '').trim();
-              if (text.isEmpty) return 'Введите название';
-              return null;
-            },
           ),
           const SizedBox(height: 12),
-          TextFormField(
+          _textField(
+            controller: nameController,
+            label: 'Название товара',
+            icon: Icons.inventory_2_outlined,
+          ),
+          const SizedBox(height: 12),
+          _textField(
             controller: descriptionController,
+            label: 'Описание',
+            icon: Icons.description_outlined,
             minLines: 3,
             maxLines: 5,
-            decoration: const InputDecoration(
-              labelText: 'Описание',
-              alignLabelWithHint: true,
-              prefixIcon: Icon(Icons.description_outlined),
-            ),
+            validator: (_) => null,
           ),
           const SizedBox(height: 12),
-          TextFormField(
+          _textField(
             controller: priceController,
+            label: 'Цена',
+            icon: Icons.payments_outlined,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
-              labelText: 'Цена',
-              prefixIcon: Icon(Icons.payments_outlined),
-            ),
             validator: (value) {
-              final raw = (value ?? '').trim().replaceAll(',', '.');
-              if (raw.isEmpty) return 'Введите цену';
-              final parsed = num.tryParse(raw);
-              if (parsed == null || parsed < 0) {
-                return 'Введите корректную цену';
+              final text = (value ?? '').trim().replaceAll(',', '.');
+              if (text.isEmpty) {
+                return 'Заполните поле';
+              }
+              if (double.tryParse(text) == null) {
+                return 'Введите число';
               }
               return null;
             },
           ),
           const SizedBox(height: 12),
-          TextFormField(
+          _textField(
             controller: quantityController,
+            label: 'Количество',
+            icon: Icons.format_list_numbered,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Количество',
-              prefixIcon: Icon(Icons.inventory_outlined),
-            ),
-            validator: (value) {
-              final raw = (value ?? '').trim();
-              if (raw.isEmpty) return 'Введите количество';
-              final parsed = int.tryParse(raw);
-              if (parsed == null || parsed < 0) {
-                return 'Введите корректное количество';
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: currencyController,
-            decoration: const InputDecoration(
-              labelText: 'Валюта',
-              prefixIcon: Icon(Icons.currency_exchange_outlined),
-            ),
             validator: (value) {
               final text = (value ?? '').trim();
-              if (text.isEmpty) return 'Введите валюту';
+              if (text.isEmpty) {
+                return 'Заполните поле';
+              }
+              final number = int.tryParse(text);
+              if (number == null || number < 0) {
+                return 'Введите число >= 0';
+              }
               return null;
             },
           ),
-          if (selectedSubcategoryId != null) ...[
-            const SizedBox(height: 18),
-            Align(
+          const SizedBox(height: 12),
+          _textField(
+            controller: currencyController,
+            label: 'Валюта',
+            icon: Icons.currency_exchange_outlined,
+          ),
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Text(
+              'Количество параметров: ${parameters.length}',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+          if (parameters.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            const Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                'Параметры подкатегории',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                'Параметры товара',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
               ),
             ),
-            const SizedBox(height: 10),
-            if (parameters.isEmpty)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Text(
-                  'Для этой подкатегории параметры пока не заданы',
-                ),
-              )
-            else
-              ...parameters.map((parameter) {
-                final parameterId = _parameterId(parameter);
-                final controller = parameterControllers.putIfAbsent(
-                  parameterId,
-                  () => TextEditingController(),
-                );
+            const SizedBox(height: 12),
+            ...parameters.map((parameter) {
+              final parameterId =
+                  int.tryParse(parameter['parameter_id'].toString()) ?? 0;
+              final parameterName = parameter['name']?.toString() ?? 'Параметр';
+              final dataType =
+                  parameter['data_type']?.toString().toLowerCase() ?? 'text';
+              final unitShortName =
+                  parameter['unit_short_name']?.toString() ?? '';
 
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: TextFormField(
-                    controller: controller,
-                    keyboardType: _keyboardByType(_parameterType(parameter)),
-                    decoration: InputDecoration(
-                      labelText: _isRequired(parameter)
-                          ? '${_parameterName(parameter)} *'
-                          : _parameterName(parameter),
-                      hintText: 'Тип: ${_parameterType(parameter)}',
-                      prefixIcon: Icon(_iconByType(_parameterType(parameter))),
-                    ),
-                    validator: (value) {
-                      final text = (value ?? '').trim();
+              final controller = parameterControllers.putIfAbsent(
+                parameterId,
+                () => TextEditingController(),
+              );
 
-                      if (_isRequired(parameter) && text.isEmpty) {
-                        return 'Заполните поле';
+              final keyboardType = dataType == 'number'
+                  ? const TextInputType.numberWithOptions(decimal: true)
+                  : TextInputType.text;
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: TextFormField(
+                  controller: controller,
+                  keyboardType: keyboardType,
+                  validator: (value) {
+                    final text = (value ?? '').trim();
+
+                    if (text.isEmpty) {
+                      return 'Заполните поле';
+                    }
+
+                    if (dataType == 'number' &&
+                        double.tryParse(text.replaceAll(',', '.')) == null) {
+                      return 'Введите число';
+                    }
+
+                    if (dataType == 'boolean') {
+                      final normalized = text.toLowerCase();
+                      const allowed = ['true', 'false', 'да', 'нет', '1', '0'];
+                      if (!allowed.contains(normalized)) {
+                        return 'Введите true/false, да/нет или 1/0';
                       }
+                    }
 
-                      if (_parameterType(parameter).toLowerCase() == 'number' &&
-                          text.isNotEmpty &&
-                          num.tryParse(text.replaceAll(',', '.')) == null) {
-                        return 'Введите число';
-                      }
-
-                      return null;
-                    },
+                    return null;
+                  },
+                  decoration: _decoration(
+                    label: parameterName,
+                    icon: Icons.tune_outlined,
+                    suffixText: unitShortName.isEmpty ? null : unitShortName,
                   ),
-                );
-              }),
+                ),
+              );
+            }),
           ],
         ],
       ),

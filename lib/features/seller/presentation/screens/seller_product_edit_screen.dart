@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:diplomeprojectmobile/features/seller/presentation/controllers/seller_controller.dart';
-import 'package:diplomeprojectmobile/features/seller/presentation/widgets/seller_product_form.dart';
 
 class SellerProductEditScreen extends StatefulWidget {
   const SellerProductEditScreen({super.key, this.product});
@@ -27,6 +26,7 @@ class _SellerProductEditScreenState extends State<SellerProductEditScreen> {
   final _sortOrderController = TextEditingController(text: '1');
 
   final Map<int, TextEditingController> _parameterControllers = {};
+  final Map<int, int?> _selectedUnitIds = {};
 
   bool _isLoading = true;
   bool _isSaving = false;
@@ -39,6 +39,7 @@ class _SellerProductEditScreenState extends State<SellerProductEditScreen> {
   List<Map<String, dynamic>> _categories = [];
   List<Map<String, dynamic>> _subcategories = [];
   List<Map<String, dynamic>> _subcategoryParameters = [];
+  List<Map<String, dynamic>> _measurementUnits = [];
   List<Map<String, dynamic>> _images = [];
 
   @override
@@ -71,40 +72,73 @@ class _SellerProductEditScreenState extends State<SellerProductEditScreen> {
       controller.dispose();
     }
     _parameterControllers.clear();
+    _selectedUnitIds.clear();
   }
 
   Future<void> _load() async {
     final controller = context.read<SellerController>();
 
     final categories = await controller.getCategories();
+    final measurementUnits = await controller.getMeasurementUnits();
 
     List<Map<String, dynamic>> subcategories = [];
     List<Map<String, dynamic>> parameters = [];
+    List<Map<String, dynamic>> productParameterValues = [];
     List<Map<String, dynamic>> images = [];
 
-    if (_selectedCategoryId != null) {
+    if (_selectedCategoryId != null && _selectedCategoryId! > 0) {
       subcategories = await controller.getSubcategories(_selectedCategoryId!);
     }
 
-    if (_selectedCategoryId != null && _selectedSubcategoryId != null) {
+    if (_selectedSubcategoryId != null && _selectedSubcategoryId! > 0) {
       parameters = await controller.getSubcategoryParameters(
-        categoryId: _selectedCategoryId!,
+        categoryId: _selectedCategoryId ?? 0,
         subcategoryId: _selectedSubcategoryId!,
       );
     }
 
-    if (_productId != null) {
+    if (_productId != null && _productId! > 0) {
       images = await controller.getProductImages(_productId!);
+      productParameterValues = await controller.getProductParameters(
+        _productId!,
+      );
     }
 
     if (!mounted) return;
 
     _clearParameterControllers();
 
+    final existingValuesByParameterId = <int, String>{};
+    final existingUnitsByParameterId = <int, int?>{};
+
+    for (final item in productParameterValues) {
+      final parameterId = int.tryParse(item['parameter_id']?.toString() ?? '');
+      if (parameterId == null || parameterId <= 0) continue;
+
+      final valueText = item['value_text']?.toString().trim() ?? '';
+      existingValuesByParameterId[parameterId] = valueText;
+
+      final unitId = int.tryParse(item['unit_id']?.toString() ?? '');
+      existingUnitsByParameterId[parameterId] = unitId;
+    }
+
+    for (final parameter in parameters) {
+      final parameterId = int.tryParse(
+        parameter['parameter_id']?.toString() ?? '',
+      );
+      if (parameterId == null || parameterId <= 0) continue;
+
+      _parameterControllers[parameterId] = TextEditingController(
+        text: existingValuesByParameterId[parameterId] ?? '',
+      );
+      _selectedUnitIds[parameterId] = existingUnitsByParameterId[parameterId];
+    }
+
     setState(() {
       _categories = categories;
       _subcategories = subcategories;
       _subcategoryParameters = parameters;
+      _measurementUnits = measurementUnits;
       _images = images;
       _isLoading = false;
     });
@@ -120,7 +154,7 @@ class _SellerProductEditScreenState extends State<SellerProductEditScreen> {
       _subcategoryParameters = [];
     });
 
-    if (value == null) return;
+    if (value == null || value <= 0) return;
 
     final subcategories = await context
         .read<SellerController>()
@@ -141,16 +175,26 @@ class _SellerProductEditScreenState extends State<SellerProductEditScreen> {
       _subcategoryParameters = [];
     });
 
-    if (value == null || _selectedCategoryId == null) return;
+    if (value == null || value <= 0) return;
 
     final parameters = await context
         .read<SellerController>()
         .getSubcategoryParameters(
-          categoryId: _selectedCategoryId!,
+          categoryId: _selectedCategoryId ?? 0,
           subcategoryId: value,
         );
 
     if (!mounted) return;
+
+    for (final parameter in parameters) {
+      final parameterId = int.tryParse(
+        parameter['parameter_id']?.toString() ?? '',
+      );
+      if (parameterId == null || parameterId <= 0) continue;
+
+      _parameterControllers[parameterId] = TextEditingController();
+      _selectedUnitIds[parameterId] = null;
+    }
 
     setState(() {
       _subcategoryParameters = parameters;
@@ -162,16 +206,20 @@ class _SellerProductEditScreenState extends State<SellerProductEditScreen> {
 
     for (final parameter in _subcategoryParameters) {
       final parameterId =
-          int.tryParse((parameter['parameter_id'] ?? '').toString()) ?? 0;
-
+          int.tryParse(parameter['parameter_id']?.toString() ?? '') ?? 0;
       if (parameterId <= 0) continue;
 
       final controller = _parameterControllers[parameterId];
       final value = controller?.text.trim() ?? '';
+      final unitId = _selectedUnitIds[parameterId];
 
       if (value.isEmpty) continue;
 
-      items.add({'parameter_id': parameterId, 'value': value});
+      items.add({
+        'parameter_id': parameterId,
+        'value': value,
+        'unit_id': unitId,
+      });
     }
 
     return items;
@@ -385,6 +433,39 @@ class _SellerProductEditScreenState extends State<SellerProductEditScreen> {
     }
   }
 
+  InputDecoration _decoration({required String label, required IconData icon}) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon),
+      filled: true,
+      fillColor: Colors.grey.shade100,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide.none,
+      ),
+    );
+  }
+
+  String _categoryName(Map<String, dynamic> item) {
+    return item['category_name']?.toString() ??
+        item['name']?.toString() ??
+        'Категория';
+  }
+
+  String _subcategoryName(Map<String, dynamic> item) {
+    return item['subcategory_name']?.toString() ??
+        item['name']?.toString() ??
+        'Подкатегория';
+  }
+
+  String _unitName(Map<String, dynamic> item) {
+    final short = item['short_name']?.toString().trim() ?? '';
+    final name = item['name']?.toString().trim() ?? '';
+    if (name.isEmpty && short.isEmpty) return 'Единица';
+    if (name.isNotEmpty && short.isNotEmpty) return '$name ($short)';
+    return name.isNotEmpty ? name : short;
+  }
+
   @override
   void dispose() {
     _clearParameterControllers();
@@ -410,21 +491,264 @@ class _SellerProductEditScreenState extends State<SellerProductEditScreen> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                SellerProductForm(
-                  formKey: _formKey,
-                  categories: _categories,
-                  selectedCategoryId: _selectedCategoryId,
-                  onCategoryChanged: _onCategoryChanged,
-                  subcategories: _subcategories,
-                  selectedSubcategoryId: _selectedSubcategoryId,
-                  onSubcategoryChanged: _onSubcategoryChanged,
-                  nameController: _nameController,
-                  descriptionController: _descriptionController,
-                  priceController: _priceController,
-                  quantityController: _quantityController,
-                  currencyController: _currencyController,
-                  parameters: _subcategoryParameters,
-                  parameterControllers: _parameterControllers,
+                Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      DropdownButtonFormField<int>(
+                        initialValue: _selectedCategoryId,
+                        items: _categories.map((category) {
+                          final id =
+                              int.tryParse(
+                                category['category_id'].toString(),
+                              ) ??
+                              0;
+                          return DropdownMenuItem<int>(
+                            value: id,
+                            child: Text(_categoryName(category)),
+                          );
+                        }).toList(),
+                        onChanged: _onCategoryChanged,
+                        validator: (value) {
+                          if (value == null || value <= 0) {
+                            return 'Выберите категорию';
+                          }
+                          return null;
+                        },
+                        decoration: _decoration(
+                          label: 'Категория',
+                          icon: Icons.category_outlined,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<int>(
+                        initialValue: _selectedSubcategoryId,
+                        items: _subcategories.map((subcategory) {
+                          final id =
+                              int.tryParse(
+                                (subcategory['subcategory_id'] ??
+                                        subcategory['podcategories_id'])
+                                    .toString(),
+                              ) ??
+                              0;
+                          return DropdownMenuItem<int>(
+                            value: id,
+                            child: Text(_subcategoryName(subcategory)),
+                          );
+                        }).toList(),
+                        onChanged: _onSubcategoryChanged,
+                        validator: (value) {
+                          if (value == null || value <= 0) {
+                            return 'Выберите подкатегорию';
+                          }
+                          return null;
+                        },
+                        decoration: _decoration(
+                          label: 'Подкатегория',
+                          icon: Icons.grid_view_rounded,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _nameController,
+                        validator: (value) {
+                          if ((value ?? '').trim().isEmpty) {
+                            return 'Заполните поле';
+                          }
+                          return null;
+                        },
+                        decoration: _decoration(
+                          label: 'Название товара',
+                          icon: Icons.inventory_2_outlined,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _descriptionController,
+                        minLines: 3,
+                        maxLines: 5,
+                        decoration: _decoration(
+                          label: 'Описание',
+                          icon: Icons.description_outlined,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _priceController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        validator: (value) {
+                          final text = (value ?? '').trim().replaceAll(
+                            ',',
+                            '.',
+                          );
+                          if (text.isEmpty) {
+                            return 'Заполните поле';
+                          }
+                          if (double.tryParse(text) == null) {
+                            return 'Введите число';
+                          }
+                          return null;
+                        },
+                        decoration: _decoration(
+                          label: 'Цена',
+                          icon: Icons.payments_outlined,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _quantityController,
+                        keyboardType: TextInputType.number,
+                        validator: (value) {
+                          final text = (value ?? '').trim();
+                          if (text.isEmpty) {
+                            return 'Заполните поле';
+                          }
+                          final number = int.tryParse(text);
+                          if (number == null || number < 0) {
+                            return 'Введите число >= 0';
+                          }
+                          return null;
+                        },
+                        decoration: _decoration(
+                          label: 'Количество',
+                          icon: Icons.format_list_numbered,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _currencyController,
+                        validator: (value) {
+                          if ((value ?? '').trim().isEmpty) {
+                            return 'Заполните поле';
+                          }
+                          return null;
+                        },
+                        decoration: _decoration(
+                          label: 'Валюта',
+                          icon: Icons.currency_exchange_outlined,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Text(
+                          'Количество параметров: ${_subcategoryParameters.length}',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      if (_subcategoryParameters.isNotEmpty) ...[
+                        const SizedBox(height: 20),
+                        const Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Параметры товара',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        ..._subcategoryParameters.map((parameter) {
+                          final parameterId =
+                              int.tryParse(
+                                parameter['parameter_id']?.toString() ?? '',
+                              ) ??
+                              0;
+                          final parameterName =
+                              parameter['name']?.toString() ?? 'Параметр';
+                          final dataType =
+                              parameter['data_type']
+                                  ?.toString()
+                                  .toLowerCase() ??
+                              'text';
+
+                          final controller = _parameterControllers.putIfAbsent(
+                            parameterId,
+                            () => TextEditingController(),
+                          );
+
+                          final selectedUnitId = _selectedUnitIds[parameterId];
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            child: Column(
+                              children: [
+                                TextFormField(
+                                  controller: controller,
+                                  keyboardType: dataType == 'number'
+                                      ? const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                        )
+                                      : TextInputType.text,
+                                  validator: (value) {
+                                    final text = (value ?? '').trim();
+                                    if (text.isEmpty) {
+                                      return 'Заполните поле';
+                                    }
+                                    if (dataType == 'number' &&
+                                        double.tryParse(
+                                              text.replaceAll(',', '.'),
+                                            ) ==
+                                            null) {
+                                      return 'Введите число';
+                                    }
+                                    return null;
+                                  },
+                                  decoration: _decoration(
+                                    label: parameterName,
+                                    icon: Icons.tune_outlined,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                DropdownButtonFormField<int?>(
+                                  initialValue: selectedUnitId,
+                                  items: [
+                                    const DropdownMenuItem<int?>(
+                                      value: null,
+                                      child: Text('Без единицы измерения'),
+                                    ),
+                                    ..._measurementUnits.map((unit) {
+                                      final id =
+                                          int.tryParse(
+                                            unit['unit_id'].toString(),
+                                          ) ??
+                                          0;
+                                      return DropdownMenuItem<int?>(
+                                        value: id,
+                                        child: Text(_unitName(unit)),
+                                      );
+                                    }),
+                                  ],
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _selectedUnitIds[parameterId] = value;
+                                    });
+                                  },
+                                  decoration: _decoration(
+                                    label: 'Единица измерения',
+                                    icon: Icons.straighten,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 16),
                 SizedBox(
@@ -456,18 +780,18 @@ class _SellerProductEditScreenState extends State<SellerProductEditScreen> {
                   const SizedBox(height: 12),
                   TextField(
                     controller: _imageUrlController,
-                    decoration: const InputDecoration(
-                      labelText: 'URL изображения',
-                      prefixIcon: Icon(Icons.image_outlined),
+                    decoration: _decoration(
+                      label: 'URL изображения',
+                      icon: Icons.image_outlined,
                     ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _sortOrderController,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Порядок сортировки',
-                      prefixIcon: Icon(Icons.sort_outlined),
+                    decoration: _decoration(
+                      label: 'Порядок сортировки',
+                      icon: Icons.sort_outlined,
                     ),
                   ),
                   const SizedBox(height: 12),

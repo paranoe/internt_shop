@@ -138,6 +138,10 @@ class SellerController extends Cubit<SellerState> {
     );
   }
 
+  Future<List<Map<String, dynamic>>> getMeasurementUnits() async {
+    return _sellerApi.getMeasurementUnits();
+  }
+
   Future<int?> createProduct({
     required int categoryId,
     required int subcategoryId,
@@ -327,5 +331,9 @@ class SellerController extends Cubit<SellerState> {
       );
       return false;
     }
+  }
+
+  Future<List<Map<String, dynamic>>> getProductParameters(int productId) async {
+    return _sellerApi.getProductParameters(productId);
   }
 }

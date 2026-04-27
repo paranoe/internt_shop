@@ -59,7 +59,10 @@ Future<Response> onRequest(RequestContext context) async {
       ) AS items_count
     FROM orders o
     $whereSql
-    ORDER BY o.created_at DESC, o.order_id DESC
+    ORDER BY
+      CASE WHEN o.status = 'created' THEN 0 ELSE 1 END ASC,
+      o.created_at DESC,
+      o.order_id DESC
     LIMIT \$$limitPos OFFSET \$$offsetPos
     ''',
     parameters: listParams,

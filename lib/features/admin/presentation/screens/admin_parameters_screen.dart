@@ -21,10 +21,146 @@ class _AdminParametersScreenState extends State<AdminParametersScreen> {
     });
   }
 
+  Future<void> _showCreateMeasurementUnitDialog() async {
+    final formKey = GlobalKey<FormState>();
+    final nameController = TextEditingController();
+    final shortNameController = TextEditingController();
+
+    final created =
+        await showModalBottomSheet<bool>(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (sheetContext) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+              ),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+                decoration: BoxDecoration(
+                  color: Theme.of(sheetContext).scaffoldBackgroundColor,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(28),
+                  ),
+                ),
+                child: Form(
+                  key: formKey,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 42,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: Colors.black26,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        const Text(
+                          'Создать единицу измерения',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: nameController,
+                          decoration: InputDecoration(
+                            labelText: 'Название',
+                            prefixIcon: const Icon(Icons.straighten),
+                            filled: true,
+                            fillColor: Colors.grey.shade100,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                          validator: (value) {
+                            if ((value ?? '').trim().isEmpty) {
+                              return 'Введите название';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 14),
+                        TextFormField(
+                          controller: shortNameController,
+                          decoration: InputDecoration(
+                            labelText: 'Краткое обозначение',
+                            hintText: 'см, кг, ГБ',
+                            prefixIcon: const Icon(Icons.short_text),
+                            filled: true,
+                            fillColor: Colors.grey.shade100,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                          validator: (value) {
+                            if ((value ?? '').trim().isEmpty) {
+                              return 'Введите краткое обозначение';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 18),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton(
+                            onPressed: () async {
+                              if (!formKey.currentState!.validate()) return;
+
+                              final ok = await context
+                                  .read<AdminController>()
+                                  .createMeasurementUnit(
+                                    name: nameController.text.trim(),
+                                    shortName: shortNameController.text.trim(),
+                                  );
+
+                              if (!mounted) return;
+                              Navigator.of(sheetContext).pop(ok);
+                            },
+                            child: const Text('Создать единицу'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ) ??
+        false;
+
+    if (!mounted) return;
+
+    if (created) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Единица измерения создана')),
+      );
+    } else {
+      final error = context.read<AdminController>().state.errorMessage;
+      if (error != null && error.isNotEmpty) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error)));
+      }
+    }
+  }
+
   Future<void> _showCreateParameterDialog() async {
     final formKey = GlobalKey<FormState>();
     final nameController = TextEditingController();
     String selectedType = 'text';
+    int? selectedUnitId;
 
     final created =
         await showModalBottomSheet<bool>(
@@ -34,6 +170,11 @@ class _AdminParametersScreenState extends State<AdminParametersScreen> {
           builder: (sheetContext) {
             return StatefulBuilder(
               builder: (context, setModalState) {
+                final units = context
+                    .read<AdminController>()
+                    .state
+                    .measurementUnits;
+
                 return Padding(
                   padding: EdgeInsets.only(
                     bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
@@ -48,103 +189,146 @@ class _AdminParametersScreenState extends State<AdminParametersScreen> {
                     ),
                     child: Form(
                       key: formKey,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Center(
-                            child: Container(
-                              width: 42,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                color: Colors.black26,
-                                borderRadius: BorderRadius.circular(999),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Center(
+                              child: Container(
+                                width: 42,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: Colors.black26,
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 20),
-                          const Text(
-                            'Создать параметр',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: nameController,
-                            decoration: InputDecoration(
-                              labelText: 'Название параметра',
-                              prefixIcon: const Icon(Icons.tune_outlined),
-                              filled: true,
-                              fillColor: Colors.grey.shade100,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(18),
-                                borderSide: BorderSide.none,
+                            const SizedBox(height: 20),
+                            const Text(
+                              'Создать параметр',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
-                            validator: (value) {
-                              if ((value ?? '').trim().isEmpty) {
-                                return 'Введите название параметра';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 14),
-                          DropdownButtonFormField<String>(
-                            value: selectedType,
-                            decoration: InputDecoration(
-                              labelText: 'Тип параметра',
-                              prefixIcon: const Icon(Icons.data_object),
-                              filled: true,
-                              fillColor: Colors.grey.shade100,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(18),
-                                borderSide: BorderSide.none,
+                            const SizedBox(height: 16),
+                            TextFormField(
+                              controller: nameController,
+                              decoration: InputDecoration(
+                                labelText: 'Название параметра',
+                                prefixIcon: const Icon(Icons.tune_outlined),
+                                filled: true,
+                                fillColor: Colors.grey.shade100,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                  borderSide: BorderSide.none,
+                                ),
                               ),
+                              validator: (value) {
+                                if ((value ?? '').trim().isEmpty) {
+                                  return 'Введите название параметра';
+                                }
+                                return null;
+                              },
                             ),
-                            items: const [
-                              DropdownMenuItem(
-                                value: 'text',
-                                child: Text('text'),
+                            const SizedBox(height: 14),
+                            DropdownButtonFormField<String>(
+                              value: selectedType,
+                              decoration: InputDecoration(
+                                labelText: 'Тип параметра',
+                                prefixIcon: const Icon(Icons.data_object),
+                                filled: true,
+                                fillColor: Colors.grey.shade100,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                  borderSide: BorderSide.none,
+                                ),
                               ),
-                              DropdownMenuItem(
-                                value: 'number',
-                                child: Text('number'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'boolean',
-                                child: Text('boolean'),
+                              items: const [
+                                DropdownMenuItem(
+                                  value: 'text',
+                                  child: Text('text'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'number',
+                                  child: Text('number'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'boolean',
+                                  child: Text('boolean'),
+                                ),
+                              ],
+                              onChanged: (value) {
+                                if (value == null) return;
+                                setModalState(() {
+                                  selectedType = value;
+                                  if (selectedType != 'number') {
+                                    selectedUnitId = null;
+                                  }
+                                });
+                              },
+                            ),
+                            if (selectedType == 'number') ...[
+                              const SizedBox(height: 14),
+                              DropdownButtonFormField<int>(
+                                value: selectedUnitId,
+                                decoration: InputDecoration(
+                                  labelText: 'Единица измерения',
+                                  prefixIcon: const Icon(Icons.straighten),
+                                  filled: true,
+                                  fillColor: Colors.grey.shade100,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(18),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                ),
+                                items: units.map((item) {
+                                  final id =
+                                      int.tryParse(
+                                        item['unit_id'].toString(),
+                                      ) ??
+                                      0;
+                                  final name = item['name']?.toString() ?? '';
+                                  final shortName =
+                                      item['short_name']?.toString() ?? '';
+                                  return DropdownMenuItem<int>(
+                                    value: id,
+                                    child: Text('$name ($shortName)'),
+                                  );
+                                }).toList(),
+                                onChanged: (value) {
+                                  setModalState(() {
+                                    selectedUnitId = value;
+                                  });
+                                },
                               ),
                             ],
-                            onChanged: (value) {
-                              if (value == null) return;
-                              setModalState(() {
-                                selectedType = value;
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 18),
-                          SizedBox(
-                            width: double.infinity,
-                            child: FilledButton(
-                              onPressed: () async {
-                                if (!formKey.currentState!.validate()) return;
+                            const SizedBox(height: 18),
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton(
+                                onPressed: () async {
+                                  if (!formKey.currentState!.validate()) return;
 
-                                final ok = await context
-                                    .read<AdminController>()
-                                    .createParameter(
-                                      name: nameController.text.trim(),
-                                      dataType: selectedType,
-                                    );
+                                  final ok = await context
+                                      .read<AdminController>()
+                                      .createParameter(
+                                        name: nameController.text.trim(),
+                                        dataType: selectedType,
+                                        unitId: selectedType == 'number'
+                                            ? selectedUnitId
+                                            : null,
+                                      );
 
-                                if (!mounted) return;
-                                Navigator.of(sheetContext).pop(ok);
-                              },
-                              child: const Text('Создать параметр'),
+                                  if (!mounted) return;
+                                  Navigator.of(sheetContext).pop(ok);
+                                },
+                                child: const Text('Создать параметр'),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -206,6 +390,47 @@ class _AdminParametersScreenState extends State<AdminParametersScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(ok ? 'Параметр удалён' : 'Не удалось удалить параметр'),
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteMeasurementUnit(
+    int unitId,
+    String unitName,
+  ) async {
+    final confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Удалить единицу измерения'),
+            content: Text('Удалить единицу "$unitName"?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Отмена'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Удалить'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!mounted || !confirmed) return;
+
+    final ok = await context.read<AdminController>().deleteMeasurementUnit(
+      unitId,
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok ? 'Единица измерения удалена' : 'Не удалось удалить единицу',
+        ),
       ),
     );
   }
@@ -361,9 +586,16 @@ class _AdminParametersScreenState extends State<AdminParametersScreen> {
                                     item['name']?.toString() ?? 'Параметр';
                                 final type =
                                     item['data_type']?.toString() ?? 'text';
+                                final unitShortName =
+                                    item['unit_short_name']?.toString() ?? '';
+
+                                final label = unitShortName.isEmpty
+                                    ? '$name ($type)'
+                                    : '$name ($type, $unitShortName)';
+
                                 return DropdownMenuItem<int>(
                                   value: id,
-                                  child: Text('$name ($type)'),
+                                  child: Text(label),
                                 );
                               }).toList(),
                               onChanged: (value) {
@@ -503,6 +735,17 @@ class _AdminParametersScreenState extends State<AdminParametersScreen> {
     );
   }
 
+  String _parameterSubtitle(Map<String, dynamic> parameter) {
+    final type = parameter['data_type']?.toString() ?? 'text';
+    final unitShortName = parameter['unit_short_name']?.toString() ?? '';
+
+    if (unitShortName.isEmpty) {
+      return 'Тип: $type';
+    }
+
+    return 'Тип: $type • Ед.: $unitShortName';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -513,7 +756,8 @@ class _AdminParametersScreenState extends State<AdminParametersScreen> {
           final isLoading =
               state.status == AdminStatus.loading &&
               state.parameters.isEmpty &&
-              state.bindings.isEmpty;
+              state.bindings.isEmpty &&
+              state.measurementUnits.isEmpty;
 
           if (isLoading) {
             return const Center(child: CircularProgressIndicator());
@@ -521,7 +765,8 @@ class _AdminParametersScreenState extends State<AdminParametersScreen> {
 
           if (state.status == AdminStatus.error &&
               state.parameters.isEmpty &&
-              state.bindings.isEmpty) {
+              state.bindings.isEmpty &&
+              state.measurementUnits.isEmpty) {
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
@@ -549,7 +794,19 @@ class _AdminParametersScreenState extends State<AdminParametersScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _showCreateMeasurementUnitDialog,
+                        icon: const Icon(Icons.straighten),
+                        label: const Text('Создать единицу измерения'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
@@ -577,7 +834,6 @@ class _AdminParametersScreenState extends State<AdminParametersScreen> {
                     final parameterId =
                         int.tryParse(parameter['parameter_id'].toString()) ?? 0;
                     final name = parameter['name']?.toString() ?? 'Параметр';
-                    final type = parameter['data_type']?.toString() ?? 'text';
 
                     return Container(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -620,7 +876,7 @@ class _AdminParametersScreenState extends State<AdminParametersScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Тип: $type',
+                                  _parameterSubtitle(parameter),
                                   style: const TextStyle(color: Colors.black54),
                                 ),
                               ],
@@ -631,6 +887,82 @@ class _AdminParametersScreenState extends State<AdminParametersScreen> {
                                 ? null
                                 : () => _confirmDeleteParameter(
                                     parameterId,
+                                    name,
+                                  ),
+                            icon: const Icon(Icons.delete_outline),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                const SizedBox(height: 20),
+                const Text(
+                  'Единицы измерения',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 12),
+                if (state.measurementUnits.isEmpty)
+                  const _AdminEmptyBlock(
+                    icon: Icons.straighten,
+                    text: 'Единиц измерения пока нет',
+                  )
+                else
+                  ...state.measurementUnits.map((unit) {
+                    final unitId =
+                        int.tryParse(unit['unit_id'].toString()) ?? 0;
+                    final name = unit['name']?.toString() ?? 'Единица';
+                    final shortName = unit['short_name']?.toString() ?? '';
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(22),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: AppColors.shadow,
+                            blurRadius: 12,
+                            offset: Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 46,
+                            height: 46,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(14),
+                              color: Colors.teal.withValues(alpha: 0.10),
+                            ),
+                            child: const Icon(Icons.straighten),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  name,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  shortName,
+                                  style: const TextStyle(color: Colors.black54),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: unitId == 0
+                                ? null
+                                : () => _confirmDeleteMeasurementUnit(
+                                    unitId,
                                     name,
                                   ),
                             icon: const Icon(Icons.delete_outline),

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import 'package:diplomeprojectmobile/app/theme/colors.dart';
 import 'package:diplomeprojectmobile/features/admin/presentation/controllers/admin_controller.dart';
 import 'package:diplomeprojectmobile/features/admin/presentation/controllers/admin_state.dart';
 import 'package:diplomeprojectmobile/features/admin/presentation/screens/admin_categories_screen.dart';
@@ -10,7 +9,10 @@ import 'package:diplomeprojectmobile/features/admin/presentation/screens/admin_o
 import 'package:diplomeprojectmobile/features/admin/presentation/screens/admin_parameters_screen.dart';
 import 'package:diplomeprojectmobile/features/admin/presentation/screens/admin_pickup_points_screen.dart';
 import 'package:diplomeprojectmobile/features/admin/presentation/screens/admin_products_screen.dart';
+import 'package:diplomeprojectmobile/features/admin/presentation/screens/admin_reviews_screen.dart';
 import 'package:diplomeprojectmobile/features/admin/presentation/screens/admin_sellers_screen.dart';
+import 'package:diplomeprojectmobile/features/admin/presentation/screens/admin_subcategories_screen.dart';
+import 'package:diplomeprojectmobile/features/admin/presentation/screens/admin_users_screen.dart';
 import 'package:diplomeprojectmobile/features/auth/presentation/controllers/auth_controller.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -21,14 +23,6 @@ class AdminDashboardScreen extends StatefulWidget {
 }
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<AdminController>().loadDashboard();
-    });
-  }
-
   int _toInt(dynamic value) {
     if (value == null) return 0;
     return int.tryParse(value.toString()) ?? 0;
@@ -42,9 +36,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final user = context.watch<AuthController>().state.user;
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AdminController>().loadDashboard();
+    });
+  }
 
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
       appBar: AppBar(
@@ -52,16 +52,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         centerTitle: true,
         actions: [
           IconButton(
-            onPressed: () => context.read<AuthController>().logout(),
+            tooltip: 'Выйти',
+            onPressed: () {
+              context.read<AuthController>().logout();
+            },
             icon: const Icon(Icons.logout),
           ),
         ],
       ),
       body: BlocBuilder<AdminController, AdminState>(
         builder: (context, state) {
-          final stats = state.stats ?? const <String, dynamic>{};
+          final isLoading =
+              state.status == AdminStatus.loading && state.stats == null;
 
-          if (state.status == AdminStatus.loading && state.stats == null) {
+          if (isLoading) {
             return const Center(child: CircularProgressIndicator());
           }
 
@@ -78,83 +82,102 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             );
           }
 
+          final stats = state.stats ?? const <String, dynamic>{};
+
+          final ordersCreated = _toInt(stats['orders_created']);
+          final ordersTotal = _toInt(stats['orders_total']);
+          final productsTotal = _toInt(stats['products_total']);
+          final sellersTotal = _toInt(stats['sellers_total']);
+          final usersTotal = _toInt(stats['users_total']);
+          final pendingReviews = _toInt(stats['reviews_pending']);
+
           return RefreshIndicator(
             onRefresh: () => context.read<AdminController>().loadDashboard(),
             child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              padding: const EdgeInsets.all(16),
               children: [
                 Container(
-                  padding: const EdgeInsets.all(22),
+                  padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(28),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: AppColors.shadow,
-                        blurRadius: 20,
-                        offset: Offset(0, 8),
-                      ),
-                    ],
+                    borderRadius: BorderRadius.circular(24),
+                    gradient: LinearGradient(
+                      colors: [
+                        Theme.of(context).colorScheme.primary,
+                        Theme.of(context).colorScheme.primaryContainer,
+                      ],
+                    ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Вы вошли как администратор',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        user?.email ?? '',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ],
+                  child: const Text(
+                    'Вы вошли как администратор',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 18),
-                if (_toInt(stats['orders_created']) > 0)
+                const SizedBox(height: 16),
+                if (ordersCreated > 0)
                   Container(
-                    margin: const EdgeInsets.only(bottom: 18),
-                    padding: const EdgeInsets.all(18),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(24),
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFFF8A65), Color(0xFFFF7043)],
-                      ),
+                      color: Colors.orange.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        const Text(
-                          'Есть заказы, ожидающие подтверждения оплаты',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
+                        const Icon(
+                          Icons.payments_outlined,
+                          color: Colors.orange,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Есть заказы, ожидающие подтверждения оплаты: $ordersCreated',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Количество: ${_toInt(stats['orders_created'])}',
-                          style: const TextStyle(color: Colors.white),
-                        ),
-                        const SizedBox(height: 12),
-                        FilledButton(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: Colors.deepOrange,
-                          ),
+                        TextButton(
                           onPressed: () =>
                               _openScreen(const AdminOrdersScreen()),
-                          child: const Text('Открыть заказы'),
+                          child: const Text('Открыть'),
                         ),
                       ],
                     ),
                   ),
-                Text(
+                if (pendingReviews > 0)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.rate_review_outlined,
+                          color: Colors.red,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Есть отзывы на модерации: $pendingReviews',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () =>
+                              _openScreen(const AdminReviewsScreen()),
+                          child: const Text('Открыть'),
+                        ),
+                      ],
+                    ),
+                  ),
+                const Text(
                   'Статистика',
-                  style: Theme.of(context).textTheme.titleLarge,
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 12),
                 GridView.count(
@@ -163,46 +186,69 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   physics: const NeverScrollableScrollPhysics(),
                   mainAxisSpacing: 12,
                   crossAxisSpacing: 12,
-                  childAspectRatio: 0.9,
+                  childAspectRatio: 1.25,
                   children: [
                     _StatCard(
-                      title: 'Заказы',
-                      value: '${_toInt(stats['orders_total'])}',
-                      subtitle: 'Всего заказов',
                       icon: Icons.receipt_long_outlined,
-                      color: Colors.blue,
+                      title: 'Заказы',
+                      value: '$ordersTotal',
+                      subtitle: 'Всего заказов',
                     ),
                     _StatCard(
+                      icon: Icons.payments_outlined,
                       title: 'Оплата',
-                      value: '${_toInt(stats['orders_created'])}',
+                      value: '$ordersCreated',
                       subtitle: 'Ждут подтверждения',
-                      icon: Icons.pending_actions_outlined,
-                      color: Colors.orange,
                     ),
                     _StatCard(
-                      title: 'Товары',
-                      value: '${_toInt(stats['products_total'])}',
-                      subtitle: 'В каталоге',
                       icon: Icons.inventory_2_outlined,
-                      color: Colors.deepPurple,
+                      title: 'Товары',
+                      value: '$productsTotal',
+                      subtitle: 'В каталоге',
                     ),
                     _StatCard(
-                      title: 'Продавцы',
-                      value: '${_toInt(stats['sellers_total'])}',
-                      subtitle: 'Всего продавцов',
                       icon: Icons.storefront_outlined,
-                      color: Colors.teal,
+                      title: 'Продавцы',
+                      value: '$sellersTotal',
+                      subtitle: 'Всего продавцов',
+                    ),
+                    _StatCard(
+                      icon: Icons.people_outline,
+                      title: 'Пользователи',
+                      value: '$usersTotal',
+                      subtitle: 'Всего пользователей',
+                    ),
+                    _StatCard(
+                      icon: Icons.rate_review_outlined,
+                      title: 'Отзывы',
+                      value: '$pendingReviews',
+                      subtitle: 'На модерации',
                     ),
                   ],
                 ),
-                const SizedBox(height: 22),
-                Text('Разделы', style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 20),
+                const Text(
+                  'Разделы',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                ),
                 const SizedBox(height: 12),
                 _AdminActionTile(
                   icon: Icons.receipt_long_outlined,
                   title: 'Заказы',
                   subtitle: 'Подтверждение оплаты и смена статусов',
                   onTap: () => _openScreen(const AdminOrdersScreen()),
+                ),
+                _AdminActionTile(
+                  icon: Icons.people_outline,
+                  title: 'Пользователи',
+                  subtitle: 'Просмотр, редактирование и блокировка',
+                  onTap: () => _openScreen(const AdminUsersScreen()),
+                ),
+                _AdminActionTile(
+                  icon: Icons.rate_review_outlined,
+                  title: 'Отзывы',
+                  subtitle: 'Модерация отзывов пользователей',
+                  onTap: () => _openScreen(const AdminReviewsScreen()),
                 ),
                 _AdminActionTile(
                   icon: Icons.tune_outlined,
@@ -213,8 +259,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 _AdminActionTile(
                   icon: Icons.category_outlined,
                   title: 'Категории',
-                  subtitle: 'Категории и подкатегории каталога',
+                  subtitle: 'Категории каталога',
                   onTap: () => _openScreen(const AdminCategoriesScreen()),
+                ),
+                _AdminActionTile(
+                  icon: Icons.grid_view_rounded,
+                  title: 'Подкатегории',
+                  subtitle: 'Подкатегории каталога',
+                  onTap: () => _openScreen(const AdminSubcategoriesScreen()),
                 ),
                 _AdminActionTile(
                   icon: Icons.location_city_outlined,
@@ -223,7 +275,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   onTap: () => _openScreen(const AdminCitiesScreen()),
                 ),
                 _AdminActionTile(
-                  icon: Icons.place_outlined,
+                  icon: Icons.local_shipping_outlined,
                   title: 'ПВЗ',
                   subtitle: 'Пункты выдачи заказов',
                   onTap: () => _openScreen(const AdminPickupPointsScreen()),
@@ -251,46 +303,36 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
 class _StatCard extends StatelessWidget {
   const _StatCard({
+    required this.icon,
     required this.title,
     required this.value,
     required this.subtitle,
-    required this.icon,
-    required this.color,
   });
 
+  final IconData icon;
   final String title;
   final String value;
   final String subtitle;
-  final IconData icon;
-  final Color color;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: const [
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
           BoxShadow(
-            color: AppColors.shadow,
-            blurRadius: 14,
-            offset: Offset(0, 6),
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(icon, color: color),
-          ),
+          Icon(icon),
           const Spacer(),
           Text(
             value,
@@ -299,12 +341,12 @@ class _StatCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             title,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 2),
           Text(
             subtitle,
-            style: const TextStyle(color: Colors.black54, fontSize: 12),
+            style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
           ),
         ],
       ),
@@ -332,16 +374,17 @@ class _AdminActionTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: AppColors.shadow,
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 12,
-            offset: Offset(0, 6),
+            offset: const Offset(0, 6),
           ),
         ],
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.all(16),
+        onTap: onTap,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: Container(
           width: 46,
           height: 46,
@@ -353,16 +396,12 @@ class _AdminActionTile extends StatelessWidget {
           ),
           child: Icon(icon),
         ),
-        title: Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
-        ),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
         subtitle: Padding(
-          padding: const EdgeInsets.only(top: 6),
+          padding: const EdgeInsets.only(top: 4),
           child: Text(subtitle),
         ),
-        trailing: const Icon(Icons.chevron_right_rounded),
-        onTap: onTap,
+        trailing: const Icon(Icons.chevron_right),
       ),
     );
   }

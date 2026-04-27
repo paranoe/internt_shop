@@ -3,6 +3,7 @@ import 'package:dart_frog/dart_frog.dart';
 
 import 'package:backend/src/core/security/jwt_service.dart';
 import 'package:backend/src/core/security/refresh_token_service.dart';
+import 'package:backend/src/db/postgres_pool.dart';
 import 'package:backend/src/integrations/redis/session_store.dart';
 
 Future<Response> onRequest(RequestContext context) async {
@@ -37,6 +38,35 @@ Future<Response> onRequest(RequestContext context) async {
       return Response.json(
         statusCode: 401,
         body: {'error': 'Refresh session not found'},
+      );
+    }
+
+    final db = context.read<PostgresClient>();
+    final conn = await db.connection;
+
+    final userRows = await conn.execute(
+      '''
+      SELECT COALESCE(is_blocked, false)
+      FROM users
+      WHERE user_id = \$1
+      LIMIT 1
+      ''',
+      parameters: [userId],
+    );
+
+    if (userRows.isEmpty) {
+      return Response.json(
+        statusCode: 401,
+        body: {'error': 'User not found'},
+      );
+    }
+
+    final isBlocked = userRows.first[0] == true;
+    if (isBlocked) {
+      await sessionStore.deleteRefreshSession(sessionId);
+      return Response.json(
+        statusCode: 403,
+        body: {'error': 'User is blocked'},
       );
     }
 

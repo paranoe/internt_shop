@@ -22,11 +22,16 @@ Future<Response> onRequest(RequestContext context) async {
       final rows = await conn.execute(
         '''
         SELECT
-          parameter_id,
-          name,
-          data_type
-        FROM parameters
-        ORDER BY parameter_id DESC
+          p.parameter_id,
+          p.name,
+          p.data_type,
+          p.unit_id,
+          mu.name,
+          mu.short_name
+        FROM parameters p
+        LEFT JOIN measurement_units mu
+          ON mu.unit_id = p.unit_id
+        ORDER BY p.parameter_id DESC
         ''',
       );
 
@@ -38,6 +43,9 @@ Future<Response> onRequest(RequestContext context) async {
                   'parameter_id': row[0],
                   'name': row[1],
                   'data_type': row[2],
+                  'unit_id': row[3],
+                  'unit_name': row[4],
+                  'unit_short_name': row[5],
                 },
               )
               .toList(),
@@ -50,6 +58,7 @@ Future<Response> onRequest(RequestContext context) async {
 
       final name = _toStringValue(data['name']);
       final dataType = _toStringValue(data['data_type']);
+      final unitId = data['unit_id'] == null ? null : _toInt(data['unit_id']);
 
       if (name.isEmpty) {
         return Response.json(
@@ -73,6 +82,32 @@ Future<Response> onRequest(RequestContext context) async {
         );
       }
 
+      if (dataType != 'number' && unitId != null && unitId > 0) {
+        return Response.json(
+          statusCode: 400,
+          body: {'error': 'unit_id is allowed only for number type'},
+        );
+      }
+
+      if (unitId != null && unitId > 0) {
+        final unitRows = await conn.execute(
+          '''
+          SELECT unit_id
+          FROM measurement_units
+          WHERE unit_id = \$1
+          LIMIT 1
+          ''',
+          parameters: [unitId],
+        );
+
+        if (unitRows.length == 0) {
+          return Response.json(
+            statusCode: 404,
+            body: {'error': 'Measurement unit not found'},
+          );
+        }
+      }
+
       final existing = await conn.execute(
         '''
         SELECT parameter_id
@@ -92,11 +127,15 @@ Future<Response> onRequest(RequestContext context) async {
 
       final inserted = await conn.execute(
         '''
-        INSERT INTO parameters (name, data_type)
-        VALUES (\$1, \$2)
-        RETURNING parameter_id, name, data_type
+        INSERT INTO parameters (name, data_type, unit_id)
+        VALUES (\$1, \$2, \$3)
+        RETURNING parameter_id, name, data_type, unit_id
         ''',
-        parameters: [name, dataType],
+        parameters: [
+          name,
+          dataType,
+          (unitId != null && unitId > 0) ? unitId : null,
+        ],
       );
 
       final row = inserted.first;
@@ -107,6 +146,7 @@ Future<Response> onRequest(RequestContext context) async {
           'parameter_id': row[0],
           'name': row[1],
           'data_type': row[2],
+          'unit_id': row[3],
         },
       );
 

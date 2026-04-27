@@ -15,10 +15,11 @@ Future<Response> onRequest(RequestContext context) async {
   final db = context.read<PostgresClient>();
 
   final raw = await context.request.body();
-  final data = jsonDecode(raw) as Map<String, dynamic>;
+  final data = (raw.isEmpty ? <String, dynamic>{} : jsonDecode(raw))
+      as Map<String, dynamic>;
 
-  final email = data['email'] as String?;
-  final password = data['password'] as String?;
+  final email = data['email']?.toString().trim();
+  final password = data['password']?.toString();
 
   if (email == null || email.isEmpty || password == null || password.isEmpty) {
     return Response.json(
@@ -31,12 +32,16 @@ Future<Response> onRequest(RequestContext context) async {
 
   final rows = await conn.execute(
     '''
-  SELECT u.user_id, u.password_hash, r.name
-  FROM users u
-  JOIN roles r ON r.role_id = u.role_id
-  WHERE u.email = \$1
-  LIMIT 1
-  ''',
+    SELECT
+      u.user_id,
+      u.password_hash,
+      r.name,
+      COALESCE(u.is_blocked, false) AS is_blocked
+    FROM users u
+    JOIN roles r ON r.role_id = u.role_id
+    WHERE u.email = \$1
+    LIMIT 1
+    ''',
     parameters: [email],
   );
 
@@ -48,9 +53,17 @@ Future<Response> onRequest(RequestContext context) async {
   }
 
   final row = rows.first;
-  final userId = row[0] as int;
-  final passwordHash = row[1] as String;
-  final role = row[2] as String;
+  final userId = int.parse(row[0].toString());
+  final passwordHash = row[1].toString();
+  final role = row[2].toString();
+  final isBlocked = row[3] == true;
+
+  if (isBlocked) {
+    return Response.json(
+      statusCode: 403,
+      body: {'error': 'User is blocked'},
+    );
+  }
 
   if (!PasswordHasher.verify(password, passwordHash)) {
     return Response.json(
@@ -63,6 +76,7 @@ Future<Response> onRequest(RequestContext context) async {
     userId: userId,
     role: role,
   );
+
   final refresh = RefreshTokenService.generate(
     userId: userId,
     role: role,
@@ -74,6 +88,7 @@ Future<Response> onRequest(RequestContext context) async {
     userId: userId,
     role: role,
   );
+
   return Response.json(
     body: {
       'access_token': token,

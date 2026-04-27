@@ -16,6 +16,7 @@ class AdminController extends Cubit<AdminState> {
       final parameters = await _adminApi.getParameters();
       final categories = await _adminApi.getCategories();
       final bindings = await _adminApi.getSubcategoryParameterBindings();
+      final measurementUnits = await _adminApi.getMeasurementUnits();
 
       emit(
         state.copyWith(
@@ -23,6 +24,7 @@ class AdminController extends Cubit<AdminState> {
           parameters: parameters,
           categories: categories,
           bindings: bindings,
+          measurementUnits: measurementUnits,
           clearError: true,
         ),
       );
@@ -48,17 +50,24 @@ class AdminController extends Cubit<AdminState> {
   Future<bool> createParameter({
     required String name,
     required String dataType,
+    int? unitId,
   }) async {
     emit(state.copyWith(status: AdminStatus.saving, clearError: true));
 
     try {
-      await _adminApi.createParameter(name: name, dataType: dataType);
+      await _adminApi.createParameter(
+        name: name,
+        dataType: dataType,
+        unitId: unitId,
+      );
       await loadAll();
       return true;
     } catch (e) {
-      emit(
-        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
-      );
+      final message = e.toString().contains('409')
+          ? 'Параметр с таким названием уже существует'
+          : e.toString();
+
+      emit(state.copyWith(status: AdminStatus.error, errorMessage: message));
       return false;
     }
   }
@@ -75,6 +84,18 @@ class AdminController extends Cubit<AdminState> {
         state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
       );
       return false;
+    }
+  }
+
+  Future<void> loadProductParametersBySubcategory(int subcategoryId) async {
+    try {
+      final items = await _adminApi.getSubcategoryParametersForProduct(
+        subcategoryId,
+      );
+
+      emit(state.copyWith(productParameters: items, clearError: true));
+    } catch (e) {
+      emit(state.copyWith(errorMessage: e.toString()));
     }
   }
 
@@ -368,6 +389,7 @@ class AdminController extends Cubit<AdminState> {
   }
 
   Future<bool> createProduct({
+    List<Map<String, dynamic>> parameterValues = const [],
     required int categoryId,
     required int sellerId,
     required int subcategoryId,
@@ -383,6 +405,7 @@ class AdminController extends Cubit<AdminState> {
       await _adminApi.createProduct(
         categoryId: categoryId,
         sellerId: sellerId,
+        parameterValues: parameterValues,
         subcategoryId: subcategoryId,
         name: name,
         description: description,
@@ -401,6 +424,7 @@ class AdminController extends Cubit<AdminState> {
   }
 
   Future<bool> updateProduct({
+    List<Map<String, dynamic>>? parameterValues,
     required int productId,
     int? categoryId,
     int? sellerId,
@@ -419,6 +443,7 @@ class AdminController extends Cubit<AdminState> {
         categoryId: categoryId,
         sellerId: sellerId,
         subcategoryId: subcategoryId,
+        parameterValues: parameterValues,
         name: name,
         description: description,
         price: price,
@@ -441,6 +466,105 @@ class AdminController extends Cubit<AdminState> {
     try {
       await _adminApi.deleteProduct(productId);
       await loadProducts();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<void> loadUsers({String? query, String? role, bool? isBlocked}) async {
+    emit(state.copyWith(status: AdminStatus.loading, clearError: true));
+
+    try {
+      final users = await _adminApi.getUsers(
+        query: query,
+        role: role,
+        isBlocked: isBlocked,
+      );
+
+      emit(
+        state.copyWith(
+          status: AdminStatus.success,
+          users: users,
+          clearError: true,
+        ),
+      );
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+    }
+  }
+
+  Future<bool> toggleUserBlocked({
+    required int userId,
+    required bool isBlocked,
+  }) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.updateUser(userId: userId, isBlocked: isBlocked);
+      await loadUsers();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> deleteUser(int userId) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.deleteUser(userId);
+      await loadUsers();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<void> loadReviews({String? status}) async {
+    emit(state.copyWith(status: AdminStatus.loading, clearError: true));
+
+    try {
+      final reviews = await _adminApi.getReviews(status: status);
+
+      emit(
+        state.copyWith(
+          status: AdminStatus.success,
+          reviews: reviews,
+          clearError: true,
+        ),
+      );
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+    }
+  }
+
+  Future<bool> updateReviewModerationStatus({
+    required int reviewId,
+    required String moderationStatus,
+    String? currentFilter,
+  }) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.updateReviewModerationStatus(
+        reviewId: reviewId,
+        moderationStatus: moderationStatus,
+      );
+      await loadReviews(status: currentFilter);
       return true;
     } catch (e) {
       emit(
@@ -711,6 +835,39 @@ class AdminController extends Cubit<AdminState> {
       emit(
         state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
       );
+    }
+  }
+
+  Future<bool> createMeasurementUnit({
+    required String name,
+    required String shortName,
+  }) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.createMeasurementUnit(name: name, shortName: shortName);
+      await loadAll();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> deleteMeasurementUnit(int unitId) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.deleteMeasurementUnit(unitId);
+      await loadAll();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
     }
   }
 }

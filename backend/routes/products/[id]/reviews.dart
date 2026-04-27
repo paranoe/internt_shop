@@ -16,7 +16,9 @@ Future<Response> onRequest(RequestContext context, String id) async {
   final productId = int.tryParse(id);
   if (productId == null) {
     return Response.json(
-        statusCode: 400, body: {'error': 'Invalid product id'});
+      statusCode: 400,
+      body: {'error': 'Invalid product id'},
+    );
   }
 
   final db = context.read<PostgresClient>();
@@ -33,7 +35,10 @@ Future<Response> onRequest(RequestContext context, String id) async {
   );
 
   if (productRows.isEmpty) {
-    return Response.json(statusCode: 404, body: {'error': 'Product not found'});
+    return Response.json(
+      statusCode: 404,
+      body: {'error': 'Product not found'},
+    );
   }
 
   final avgRows = await conn.execute(
@@ -41,11 +46,12 @@ Future<Response> onRequest(RequestContext context, String id) async {
     SELECT COUNT(*) AS reviews_count, AVG(rating) AS avg_rating
     FROM reviews
     WHERE product_id = \$1
+      AND moderation_status = 'approved'
     ''',
     parameters: [productId],
   );
 
-  final reviewsCount = (avgRows.first[0] as num).toInt();
+  final reviewsCount = int.tryParse(avgRows.first[0].toString()) ?? 0;
   final avgRating = _toNum(avgRows.first[1]);
 
   final rows = await conn.execute(
@@ -61,6 +67,7 @@ Future<Response> onRequest(RequestContext context, String id) async {
     FROM reviews r
     JOIN users u ON u.user_id = r.buyer_id
     WHERE r.product_id = \$1
+      AND r.moderation_status = 'approved'
     ORDER BY r.created_at DESC, r.review_id DESC
     ''',
     parameters: [productId],

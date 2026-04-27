@@ -1,44 +1,61 @@
 ﻿import 'dart:convert';
 import 'package:dart_frog/dart_frog.dart';
-
-import '../../../lib/src/db/postgres_pool.dart';
-
-int? _toInt(dynamic v) {
-  if (v == null) return null;
-  if (v is int) return v;
-  return int.tryParse(v.toString());
-}
+import 'package:backend/src/db/postgres_pool.dart';
 
 Future<Response> onRequest(RequestContext context, String id) async {
-  if (context.request.method != HttpMethod.patch) {
-    return Response(statusCode: 405);
-  }
-
   final userId = int.tryParse(id);
   if (userId == null) {
     return Response.json(statusCode: 400, body: {'error': 'Invalid user id'});
+  }
+
+  final db = context.read<PostgresClient>();
+  final conn = await db.connection;
+
+  if (context.request.method == HttpMethod.delete) {
+    final deleted = await conn.execute(
+      '''
+      DELETE FROM users
+      WHERE user_id = \$1
+      RETURNING user_id
+      ''',
+      parameters: [userId],
+    );
+
+    if (deleted.isEmpty) {
+      return Response.json(statusCode: 404, body: {'error': 'User not found'});
+    }
+
+    return Response.json(
+      body: {
+        'deleted': true,
+        'user_id': userId,
+      },
+    );
+  }
+
+  if (context.request.method != HttpMethod.patch) {
+    return Response(statusCode: 405);
   }
 
   final raw = await context.request.body();
   final data = (raw.isEmpty ? <String, dynamic>{} : jsonDecode(raw))
       as Map<String, dynamic>;
 
-  final roleName = (data['role'] as String?)?.trim(); // admin/seller/buyer
-
+  final roleName = (data['role'] as String?)?.trim();
   final firstName = data['first_name'] as String?;
   final lastName = data['last_name'] as String?;
   final patronymic = data['patronymic'] as String?;
   final phone = data['phone'] as String?;
   final gender = data['gender'] as String?;
+  final isBlocked = data['is_blocked'] as bool?;
 
   final sets = <String>[];
   final params = <Object?>[];
 
-  // role -> role_id
   if (roleName != null && roleName.isNotEmpty) {
-    // set role_id via subquery
     sets.add(
-        'role_id = (SELECT role_id FROM roles WHERE name = \$${params.length + 1})');
+      'role_id = (SELECT role_id FROM roles WHERE name = \$${params.length + 1})',
+    );
     params.add(roleName);
   }
 
@@ -53,16 +70,15 @@ Future<Response> onRequest(RequestContext context, String id) async {
   addSet('patronymic', patronymic);
   addSet('phone', phone);
   addSet('gender', gender);
+  addSet('is_blocked', isBlocked);
 
   if (sets.isEmpty) {
     return Response.json(
-        statusCode: 400, body: {'error': 'No fields to update'});
+      statusCode: 400,
+      body: {'error': 'No fields to update'},
+    );
   }
 
-  final db = context.read<PostgresClient>();
-  final conn = await db.connection;
-
-  // update
   final updateParams = [...params, userId];
   final userIdPos = updateParams.length;
 
@@ -80,7 +96,6 @@ Future<Response> onRequest(RequestContext context, String id) async {
     return Response.json(statusCode: 404, body: {'error': 'User not found'});
   }
 
-  // return fresh user (with role name)
   final rows = await conn.execute(
     '''
     SELECT
@@ -92,6 +107,7 @@ Future<Response> onRequest(RequestContext context, String id) async {
       u.email,
       u.gender,
       u.created_at,
+      u.is_blocked,
       r.name AS role
     FROM users u
     JOIN roles r ON r.role_id = u.role_id
@@ -112,7 +128,8 @@ Future<Response> onRequest(RequestContext context, String id) async {
       'email': row[5],
       'gender': row[6],
       'created_at': row[7].toString(),
-      'role': row[8],
+      'is_blocked': row[8] == true,
+      'role': row[9],
     },
   );
 }

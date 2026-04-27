@@ -6,11 +6,11 @@ Future<Response> onRequest(RequestContext context, String id) async {
     return Response(statusCode: 405);
   }
 
-  final podcategoryId = int.tryParse(id);
-  if (podcategoryId == null || podcategoryId <= 0) {
+  final productId = int.tryParse(id);
+  if (productId == null || productId <= 0) {
     return Response.json(
       statusCode: 400,
-      body: {'error': 'Invalid podcategory id'},
+      body: {'error': 'Invalid product id'},
     );
   }
 
@@ -20,27 +20,37 @@ Future<Response> onRequest(RequestContext context, String id) async {
   final rows = await conn.execute(
     '''
     SELECT
-      cp.podcategory_id,
-      cp.parameter_id,
-      cp.is_required,
+      ppv.product_id,
+      ppv.parameter_id,
       p.name,
-      p.data_type
-    FROM category_parameters cp
+      p.data_type,
+      ppv.unit_id,
+      mu.name AS unit_name,
+      mu.short_name AS unit_short_name,
+      ppv.value_text
+    FROM product_parameter_values ppv
     JOIN parameters p
-      ON p.parameter_id = cp.parameter_id
-    WHERE cp.podcategory_id = \$1
+      ON p.parameter_id = ppv.parameter_id
+    LEFT JOIN measurement_units mu
+      ON mu.unit_id = ppv.unit_id
+    WHERE ppv.product_id = \$1
     ORDER BY p.name ASC
     ''',
-    parameters: [podcategoryId],
+    parameters: [productId],
   );
 
   final items = rows.map((r) {
     return {
-      'podcategory_id': r[0],
+      'product_id': r[0],
       'parameter_id': r[1],
-      'is_required': r[2],
-      'name': r[3],
-      'data_type': r[4],
+      'name': r[2],
+      'data_type': r[3],
+      'unit_id': r[4],
+      'unit_name': r[5],
+      'unit_short_name': r[6],
+      'value_text': r[7],
+      'value_number': null,
+      'value_boolean': null,
     };
   }).toList();
 

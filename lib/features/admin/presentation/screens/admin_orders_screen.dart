@@ -90,7 +90,7 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
               padding: const EdgeInsets.all(16),
               children: [
                 DropdownButtonFormField<String?>(
-                  value: _selectedStatus,
+                  initialValue: _selectedStatus,
                   decoration: InputDecoration(
                     labelText: 'Фильтр по статусу',
                     filled: true,
@@ -158,6 +158,9 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(22),
+                        border: status == 'created'
+                            ? Border.all(color: Colors.blue, width: 1.4)
+                            : null,
                         boxShadow: const [
                           BoxShadow(
                             color: AppColors.shadow,
@@ -169,12 +172,37 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Заказ #$orderId',
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w700,
-                            ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Заказ #$orderId',
+                                  style: const TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              if (status == 'created')
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.withValues(alpha: 0.10),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: const Text(
+                                    'Ждёт оплаты',
+                                    style: TextStyle(
+                                      color: Colors.blue,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                           const SizedBox(height: 10),
                           Container(

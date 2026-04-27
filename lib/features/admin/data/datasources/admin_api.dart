@@ -38,10 +38,11 @@ class AdminApi {
   Future<void> createParameter({
     required String name,
     required String dataType,
+    int? unitId,
   }) async {
     await _dioClient.dio.post(
       '/admin/parameters',
-      data: {'name': name, 'data_type': dataType},
+      data: {'name': name, 'data_type': dataType, 'unit_id': unitId},
     );
   }
 
@@ -77,6 +78,15 @@ class AdminApi {
       '/admin/subcategory-parameters/$subcategoryId',
       queryParameters: {'parameter_id': parameterId},
     );
+  }
+
+  Future<List<Map<String, dynamic>>> getSubcategoryParametersForProduct(
+    int subcategoryId,
+  ) async {
+    final response = await _dioClient.dio.get(
+      '/subcategories/$subcategoryId/parameters',
+    );
+    return _extractItems(response.data);
   }
 
   Future<List<Map<String, dynamic>>> getOrders({
@@ -201,6 +211,7 @@ class AdminApi {
     required String price,
     required int quantity,
     String currency = 'BYN',
+    List<Map<String, dynamic>> parameterValues = const [],
   }) async {
     await _dioClient.dio.post(
       '/admin/products',
@@ -213,6 +224,7 @@ class AdminApi {
         'price': num.tryParse(price.replaceAll(',', '.')) ?? price,
         'quantity': quantity,
         'currency': currency,
+        'parameter_values': parameterValues,
       },
     );
   }
@@ -227,6 +239,7 @@ class AdminApi {
     String? price,
     int? quantity,
     String? currency,
+    List<Map<String, dynamic>>? parameterValues,
   }) async {
     final body = <String, dynamic>{};
 
@@ -240,6 +253,7 @@ class AdminApi {
     }
     if (quantity != null) body['quantity'] = quantity;
     if (currency != null) body['currency'] = currency;
+    if (parameterValues != null) body['parameter_values'] = parameterValues;
 
     await _dioClient.dio.patch('/admin/products/$productId', data: body);
   }
@@ -280,6 +294,82 @@ class AdminApi {
         'user_id': userId,
       },
     );
+  }
+
+  Future<List<Map<String, dynamic>>> getUsers({
+    String? query,
+    String? role,
+    bool? isBlocked,
+    int page = 1,
+    int limit = 20,
+  }) async {
+    final response = await _dioClient.dio.get(
+      '/admin/users',
+      queryParameters: {
+        'page': page,
+        'limit': limit,
+        if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
+        if (role != null && role.trim().isNotEmpty) 'role': role.trim(),
+        if (isBlocked != null) 'blocked': isBlocked.toString(),
+      },
+    );
+
+    print('ADMIN USERS RAW: ${response.data}');
+    return _extractItems(response.data);
+  }
+
+  Future<List<Map<String, dynamic>>> getReviews({
+    String? status,
+    int page = 1,
+    int limit = 20,
+  }) async {
+    final response = await _dioClient.dio.get(
+      '/admin/reviews',
+      queryParameters: {
+        'page': page,
+        'limit': limit,
+        if (status != null && status.trim().isNotEmpty) 'status': status,
+      },
+    );
+
+    return _extractItems(response.data);
+  }
+
+  Future<void> updateReviewModerationStatus({
+    required int reviewId,
+    required String moderationStatus,
+  }) async {
+    await _dioClient.dio.patch(
+      '/admin/reviews/$reviewId',
+      data: {'moderation_status': moderationStatus},
+    );
+  }
+
+  Future<void> updateUser({
+    required int userId,
+    String? firstName,
+    String? lastName,
+    String? patronymic,
+    String? phone,
+    String? gender,
+    String? role,
+    bool? isBlocked,
+  }) async {
+    final body = <String, dynamic>{};
+
+    if (firstName != null) body['first_name'] = firstName;
+    if (lastName != null) body['last_name'] = lastName;
+    if (patronymic != null) body['patronymic'] = patronymic;
+    if (phone != null) body['phone'] = phone;
+    if (gender != null) body['gender'] = gender;
+    if (role != null) body['role'] = role;
+    if (isBlocked != null) body['is_blocked'] = isBlocked;
+
+    await _dioClient.dio.patch('/admin/users/$userId', data: body);
+  }
+
+  Future<void> deleteUser(int userId) async {
+    await _dioClient.dio.delete('/admin/users/$userId');
   }
 
   Future<void> updateSeller({
@@ -372,5 +462,24 @@ class AdminApi {
   Future<Map<String, dynamic>> getStats() async {
     final response = await _dioClient.dio.get('/admin/stats');
     return Map<String, dynamic>.from(response.data as Map);
+  }
+
+  Future<List<Map<String, dynamic>>> getMeasurementUnits() async {
+    final response = await _dioClient.dio.get('/admin/measurement-units');
+    return _extractItems(response.data);
+  }
+
+  Future<void> createMeasurementUnit({
+    required String name,
+    required String shortName,
+  }) async {
+    await _dioClient.dio.post(
+      '/admin/measurement-units',
+      data: {'name': name, 'short_name': shortName},
+    );
+  }
+
+  Future<void> deleteMeasurementUnit(int unitId) async {
+    await _dioClient.dio.delete('/admin/measurement-units/$unitId');
   }
 }

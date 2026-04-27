@@ -17,7 +17,7 @@ Future<int?> _resolveSellerId(PostgresClient db, int userId) async {
     parameters: [userId],
   );
 
-  if (rows.length == 0) return null;
+  if (rows.isEmpty) return null;
   return (rows.first[0] as num).toInt();
 }
 
@@ -39,7 +39,7 @@ Future<Response> onRequest(RequestContext context, String id) async {
   }
 
   final productId = int.tryParse(id);
-  if (productId == null) {
+  if (productId == null || productId <= 0) {
     return Response.json(
       statusCode: 400,
       body: {'error': 'Invalid product id'},
@@ -57,7 +57,7 @@ Future<Response> onRequest(RequestContext context, String id) async {
     parameters: [productId, sellerId],
   );
 
-  if (owns.length == 0) {
+  if (owns.isEmpty) {
     return Response.json(
       statusCode: 404,
       body: {'error': 'Product not found (or not yours)'},
@@ -65,7 +65,8 @@ Future<Response> onRequest(RequestContext context, String id) async {
   }
 
   final raw = await context.request.body();
-  final data = jsonDecode(raw) as Map<String, dynamic>;
+  final data = (raw.isEmpty ? <String, dynamic>{} : jsonDecode(raw))
+      as Map<String, dynamic>;
   final items = (data['items'] as List?) ?? const [];
 
   await conn.runTx((tx) async {
@@ -78,12 +79,46 @@ Future<Response> onRequest(RequestContext context, String id) async {
     );
 
     for (final item in items) {
-      final m = item as Map<String, dynamic>;
-      final parameterId = int.tryParse(m['parameter_id']?.toString() ?? '');
-      final value = m['value']?.toString();
+      final m = Map<String, dynamic>.from(item as Map);
 
-      if (parameterId == null || value == null || value.trim().isEmpty) {
+      final parameterId = int.tryParse(m['parameter_id']?.toString() ?? '');
+      final value = m['value']?.toString().trim() ?? '';
+      final unitIdRaw = m['unit_id'];
+      final unitId =
+          unitIdRaw == null ? null : int.tryParse(unitIdRaw.toString());
+
+      if (parameterId == null || parameterId <= 0 || value.isEmpty) {
         continue;
+      }
+
+      final parameterExists = await tx.execute(
+        '''
+        SELECT 1
+        FROM parameters
+        WHERE parameter_id = \$1
+        LIMIT 1
+        ''',
+        parameters: [parameterId],
+      );
+
+      if (parameterExists.isEmpty) {
+        continue;
+      }
+
+      if (unitId != null) {
+        final unitExists = await tx.execute(
+          '''
+          SELECT 1
+          FROM measurement_units
+          WHERE unit_id = \$1
+          LIMIT 1
+          ''',
+          parameters: [unitId],
+        );
+
+        if (unitExists.isEmpty) {
+          continue;
+        }
       }
 
       await tx.execute(
@@ -91,11 +126,12 @@ Future<Response> onRequest(RequestContext context, String id) async {
         INSERT INTO product_parameter_values (
           product_id,
           parameter_id,
-          value_text
+          value_text,
+          unit_id
         )
-        VALUES (\$1, \$2, \$3)
+        VALUES (\$1, \$2, \$3, \$4)
         ''',
-        parameters: [productId, parameterId, value.trim()],
+        parameters: [productId, parameterId, value, unitId],
       );
     }
   });
