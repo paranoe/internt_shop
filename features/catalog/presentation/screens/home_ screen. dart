@@ -1,16 +1,15 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
+import 'package:diplomeprojectmobile/app/colors.dart';
 import 'package:diplomeprojectmobile/app/router/routes.dart';
-
-import 'package:diplomeprojectmobile/app/theme/colors.dart';
 import 'package:diplomeprojectmobile/core/widgets/error_view.dart';
 import 'package:diplomeprojectmobile/core/widgets/shimmer_loader.dart';
 import 'package:diplomeprojectmobile/features/catalog/presentation/controllers/catalog_controller.dart';
 import 'package:diplomeprojectmobile/features/catalog/presentation/controllers/catalog_state.dart';
 import 'package:diplomeprojectmobile/features/catalog/presentation/widgets/filters_sheet_content.dart';
-import 'package:diplomeprojectmobile/features/favorites/presentation/controllers/favorites_controller.dart';
-import 'package:diplomeprojectmobile/features/favorites/presentation/controllers/favorites_state.dart';
+import 'package:diplomeprojectmobile/features/favorites/ presentation/ controllers/favorites_controller.dart';
+import 'package:diplomeprojectmobile/features/favorites/ presentation/ controllers/favorites_state.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -42,14 +41,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _reload() async {
     final query = _searchController.text.trim();
-
     await context.read<FavoritesController>().loadFavorites();
 
     if (query.isNotEmpty) {
       await context.read<CatalogController>().search(query);
       return;
     }
-
     await context.read<CatalogController>().loadHome();
   }
 
@@ -59,10 +56,8 @@ class _HomeScreenState extends State<HomeScreen> {
     context.read<CatalogController>().loadHome();
   }
 
-  Future<void> _openFiltersSheet(BuildContext context) async {
-    final catalogState = context.read<CatalogController>().state;
-
-    final result = await showModalBottomSheet<FilterResult>(
+  Future<void> _openFiltersSheet(BuildContext context, CatalogState state) async {
+    final result = await showModalBottomSheet<_FilterResult>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -71,11 +66,11 @@ class _HomeScreenState extends State<HomeScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
       builder: (sheetContext) {
-        return FiltersSheetContent(state: catalogState);
+        return FiltersSheetContent(state: state);
       },
     );
 
-    if (!context.mounted || result == null) return;
+    if (!mounted || result == null) return;
 
     if (result.clear) {
       await context.read<CatalogController>().clearFilters();
@@ -148,19 +143,17 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     if (state.availableParameters.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: () => _openFiltersSheet(context),
-                            icon: const Icon(Icons.tune_rounded),
-                            label: const Text('Фильтры'),
-                          ),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () => _openFiltersSheet(context, state),
+                          icon: const Icon(Icons.tune_rounded),
+                          label: const Text('Фильтры'),
                         ),
                       ),
+                    const SizedBox(height: 12),
                     Row(
                       children: [
                         Expanded(
@@ -212,11 +205,11 @@ class _HomeScreenState extends State<HomeScreen> {
                             physics: const NeverScrollableScrollPhysics(),
                             gridDelegate:
                                 const SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 2,
-                                  mainAxisSpacing: 4,
-                                  crossAxisSpacing: 4,
-                                  mainAxisExtent: 245,
-                                ),
+                              crossAxisCount: 2,
+                              mainAxisSpacing: 4,
+                              crossAxisSpacing: 4,
+                              mainAxisExtent: 245,
+                            ),
                             itemBuilder: (context, index) {
                               final product = state.products[index];
                               final isFavorite = context
@@ -371,9 +364,9 @@ class _HomeProductCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w800,
-                            ),
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -395,4 +388,20 @@ class _HomeProductCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _FilterResult {
+  final bool clear;
+  final double? minPrice;
+  final double? maxPrice;
+  final double? minRating;
+  final Map<String, List<String>>? parameterFilters;
+
+  _FilterResult({
+    this.clear = false,
+    this.minPrice,
+    this.maxPrice,
+    this.minRating,
+    this.parameterFilters,
+  });
 }

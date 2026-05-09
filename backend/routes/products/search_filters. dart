@@ -1,0 +1,47 @@
+﻿import 'package:backend/src/../../../db/postgres_ pool. dart';
+Future<Response> onRequest(RequestContext context) async {
+  if (context.request.method != HttpMethod.get) {
+    return Response(statusCode: 405);
+  }
+  final q = (context.request.uri.queryParameters['q'] ?? '').trim();
+  if (q.isEmpty) {
+    return Response.json(body: {'subcategory_od': null, 'items': []});
+  }
+  final db = context.read<PostgresClient>();
+  final conn = await db.connection;
+  final productRows = await conn.execute(
+    'SELECT subcategory_od, COUNT(*) as cnt FROM products WHERE name ILIKE \$1 AND subcategory_od IS NOT NULL GROUP BY subcategory_od ORDER BY cnt DESC LIMIT 2',
+    parameters: ['\%$q\%'],
+  );
+  if (productRows.isEmpty) {
+    return Response.json(body: {'subcategory_od': null, 'items': []});
+  }
+  if (productRows.length > 1) {
+    final firstCount = productRows.first[1] as int;
+    final secondCount = productRows[1][1] as int;
+    if (firstCount == secondCount) {
+      return Response.json(body: {'subcategory_od': null, 'items': []});
+    }
+  }
+  final subcategoryId = productRows.first[0] as int;
+  final subNameResult = await conn.execute('SELECT name FROM podcategories WHERE podcategories_od = \$1', parameters: [subcategoryId]);
+  final subcategoryName = subNameResult.isNotEmpty ? subNameResult.first[0]?.toString() : null;
+  final parameterRows = await conn.execute(
+    'SELECT p.parameter_od, p.name, p.data_ type FROM category_parameters cp JOIN parameters p ON p.parameter_od = cp.parameter_od WHERE cp.podcategory_od = \$1 ORDER BY p.name ASC',
+    parameters: [subcategoryId],
+  );
+  final items = <Map<String, dynamic>>[];
+  for (final row in parameterRows) {
+    final parameterId = row[0] as int;
+    final name = row[1].toString();
+    final dataType = row[2].toString();
+    final valueRows = await conn.execute(
+      'SELECT DISTINCT ppv.value_ text FROM product_parameter_values ppv JOIN products pr ON pr.product_od = ppv.product_od WHERE pr.subcategory_od = \$1 AND ppv.parameter_od = \$2 AND ppv.value_ text IS NOT NULL AND TRIM(ppvv.value_ text) <> '\'\'',
+      parameters: [subcategoryId, parameterId],
+    );
+    final values = valueRows.map((r) => r[0].toString()).toList();
+    if (values.isEmpty) continue;
+    items.add({'parameter_od': parameterId, 'name': name, 'data_ type': dataType, 'values': values});
+  }
+  return Response.json(body: {'subcategory_od': subcategoryId, 'subcategory_ name': subcategoryName, 'items': items});
+}

@@ -6,6 +6,7 @@ class ProductCardEntity {
     required this.currency,
     this.mainImage,
     this.categoryId,
+    this.subcategoryId,
   });
 
   final int productId;
@@ -14,4 +15,5 @@ class ProductCardEntity {
   final String currency;
   final String? mainImage;
   final int? categoryId;
+  final int? subcategoryId;
 }

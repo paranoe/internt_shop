@@ -170,18 +170,30 @@ class CatalogController extends Cubit<CatalogState> {
     try {
       await _loadProducts(searchQuery: q);
 
-      if (state.selectedSubcategoryId != null) {
-        await _loadAvailableParameters(
-          subcategoryId: state.selectedSubcategoryId,
-        );
+      // Если есть найденные товары - определяем их подкатегорию
+      if (state.products.isNotEmpty) {
+        // Берем subcategory_id первого товара
+        final firstProduct = state.products.first;
+        
+        if (firstProduct.subcategoryId != null) {
+          // Загружаем фильтры для найденной подкатегории
+          await _loadAvailableParameters(subcategoryId: firstProduct.subcategoryId);
+          
+          // Сохраняем выбранную подкатегорию
+          emit(state.copyWith(selectedSubcategoryId: firstProduct.subcategoryId));
+        } else {
+          emit(state.copyWith(availableParameters: const []));
+        }
         return;
       }
 
+      // Если товары не найдены - очищаем фильтры
       if (q.isEmpty) {
         emit(state.copyWith(availableParameters: const []));
         return;
       }
 
+      // Fallback: пробуем получить фильтры через API
       final result = await _catalogApi.getSearchFilters(q);
       final detectedSubcategoryId = int.tryParse(
         result['subcategory_id']?.toString() ?? '',

@@ -20,22 +20,19 @@ Future<Response> onRequest(RequestContext context) async {
   final db = context.read<PostgresClient>();
   final conn = await db.connection;
 
-  final subRows = await conn.execute(
+  final productRows = await conn.execute(
     '''
-    SELECT
-      p.subcategory_id,
-      COUNT(*) AS cnt
-    FROM products p
-    WHERE p.name ILIKE \$1
-      AND p.subcategory_id IS NOT NULL
-    GROUP BY p.subcategory_id
+    SELECT subcategory_id, COUNT(*) as cnt
+    FROM products
+    WHERE name ILIKE \$1
+    GROUP BY subcategory_id
     ORDER BY cnt DESC
     LIMIT 2
     ''',
     parameters: ['%$q%'],
   );
 
-  if (subRows.isEmpty) {
+  if (productRows.isEmpty) {
     return Response.json(
       body: {
         'subcategory_id': null,
@@ -44,10 +41,9 @@ Future<Response> onRequest(RequestContext context) async {
     );
   }
 
-  if (subRows.length > 1) {
-    final firstCount = (subRows[0][1] as int);
-    final secondCount = (subRows[1][1] as int);
-
+  if (productRows.length > 1) {
+    final firstCount = productRows.first[1] as int;
+    final secondCount = productRows[1][1] as int;
     if (firstCount == secondCount) {
       return Response.json(
         body: {
@@ -58,17 +54,30 @@ Future<Response> onRequest(RequestContext context) async {
     }
   }
 
-  final subcategoryId = subRows.first[0] as int;
+  final dominantSubcategoryId = productRows.first[0];
+  if (dominantSubcategoryId == null) {
+    return Response.json(
+      body: {
+        'subcategory_id': null,
+        'items': [],
+      },
+    );
+  }
+  final subcategoryId = dominantSubcategoryId as int;
+
+  final subNameResult = await conn.execute(
+    'SELECT name FROM podcategories WHERE podcategories_id = \$1',
+    parameters: [subcategoryId],
+  );
+  final subcategoryName = subNameResult.isNotEmpty
+      ? subNameResult.first[0]?.toString()
+      : null;
 
   final parameterRows = await conn.execute(
     '''
-    SELECT
-      p.parameter_id,
-      p.name,
-      p.data_type
+    SELECT p.parameter_id, p.name, p.data_type
     FROM category_parameters cp
-    JOIN parameters p
-      ON p.parameter_id = cp.parameter_id
+    JOIN parameters p ON p.parameter_id = cp.parameter_id
     WHERE cp.podcategory_id = \$1
     ORDER BY p.name ASC
     ''',
@@ -86,16 +95,14 @@ Future<Response> onRequest(RequestContext context) async {
       '''
       SELECT DISTINCT ppv.value_text
       FROM product_parameter_values ppv
-      JOIN products pr
-        ON pr.product_id = ppv.product_id
+      JOIN products pr ON pr.product_id = ppv.product_id
       WHERE pr.subcategory_id = \$1
-        AND pr.name ILIKE \$2
-        AND ppv.parameter_id = \$3
+        AND ppv.parameter_id = \$2
         AND ppv.value_text IS NOT NULL
         AND BTRIM(ppv.value_text) <> ''
       ORDER BY ppv.value_text ASC
       ''',
-      parameters: [subcategoryId, '%$q%', parameterId],
+      parameters: [subcategoryId, parameterId],
     );
 
     final values = valueRows.map((r) => r[0].toString()).toList();
@@ -113,6 +120,7 @@ Future<Response> onRequest(RequestContext context) async {
   return Response.json(
     body: {
       'subcategory_id': subcategoryId,
+      'subcategory_name': subcategoryName,
       'items': items,
     },
   );

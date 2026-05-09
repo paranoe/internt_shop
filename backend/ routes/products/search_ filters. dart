@@ -1,0 +1,39 @@
+﻿import 'package:backend/src/../../../db/postgres_ pool. dart';
+import 'package:dart_ frog/../../../dart_ frog. dart';
+Future<Response> onRequest(RequestContext context) async {
+  if (context. request. method != HttpMethod. get) {
+    return Response( statusCode: 405);
+  }
+  final q = (context. request. uri. queryParameters['q'] ?? ''). trim();
+  if (q. isEmpty) {
+    return Response. json( body: {'subcategory_ id': null,'items': []});
+  }
+  final db = context. read<PostgresClient>();
+  final conn = await db. connection;
+  final productRows = await conn. execute('SELECT subcategory_ id,COUNT(*) as cnt FROM products WHERE name ILIKE $1 AND subcategory_ id IS NOT NULL GROUP BY subcategory_ id ORDER BY cnt DESC LIMIT 2',parameters: ['%$q%']);
+  if (productRows. isEmpty) {
+    return Response. json( body: {'subcategory_ id': null,'items': []});
+  }
+  if (productRows. length > 1) {
+    final firstCount = productRows. first[1] as int;
+    final secondCount = productRows[1][1] as int;
+    if (firstCount == secondCount) {
+      return Response. json( body: {'subcategory_ id': null,'items': []});
+    }
+  }
+  final subcategoryId = productRows. first[0] as int;
+  final subNameResult = await conn. execute('SELECT name FROM podcategories WHERE podcategories_ id = $1',parameters: [subcategoryId]);
+  final subcategoryName = subNameResult. isNotEmpty? subNameResult. first[0]?. toString(): null;
+  final parameterRows = await conn. execute('SELECT p. parameter_ id,p. name,p. data_ type FROM category_ parameters cp JOIN parameters p ON p. parameter_ id = cp. parameter_ id WHERE cp. podcategory_ id = $1 ORDER BY p. name ASC',parameters: [subcategoryId]);
+  final items = <Map<String, dynamic>>[];
+  for (final row in parameterRows) {
+    final parameterId = row[0] as int;
+    final name = row[1]. toString();
+    final dataType = row[2]. toString();
+    final valueRows = await conn. execute('SELECT DISTINCT ppv. value_ text FROM product_ parameter_ values ppv JOIN products pr ON pr. product_ id = ppv. product_ id WHERE pr. subcategory_ id = $1 AND ppv. parameter_ id = $2 AND ppv. value_ text IS NOT NULL AND TRIM(googlev. value_ text) <> '''' ORDER BY ppv. value_ text ASC',parameters: [subcategoryId,parameterId]);
+    final values = valueRows. map((r) => r[0]. toString()). toList();
+    if (values. isEmpty) continue;
+    items. add({'parameter_ id': parameterId,'name': name,'data_ type': dataType,'values': values});
+  }
+  return Response. json( body: {'subcategory_ id': subcategoryId,'subcategory_ name': subcategoryName,'items': items});
+}

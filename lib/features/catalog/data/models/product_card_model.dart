@@ -8,6 +8,7 @@ class ProductCardModel extends ProductCardEntity {
     required super.currency,
     super.mainImage,
     super.categoryId,
+    super.subcategoryId,
   });
 
   factory ProductCardModel.fromJson(Map<String, dynamic> json) {
@@ -20,6 +21,9 @@ class ProductCardModel extends ProductCardEntity {
       categoryId: json['category_id'] == null
           ? null
           : int.tryParse(json['category_id'].toString()),
+      subcategoryId: json['subcategory_id'] == null
+          ? null
+          : int.tryParse(json['subcategory_id'].toString()),
     );
   }
 }
