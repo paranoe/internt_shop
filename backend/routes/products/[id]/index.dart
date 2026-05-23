@@ -14,6 +14,7 @@ Future<Response> onRequest(RequestContext context, String id) async {
       body: {'error': 'Invalid product id'},
     );
   }
+
   bool canReview = false;
   final db = context.read<PostgresClient>();
   final conn = await db.connection;
@@ -48,8 +49,9 @@ Future<Response> onRequest(RequestContext context, String id) async {
       p.description,
       p.price,
       p.currency,
-      p.category_id,
+      pc.category_id,
       p.seller_id,
+      p.subcategory_id,
       (
         SELECT pi.image_url
         FROM product_images pi
@@ -58,6 +60,8 @@ Future<Response> onRequest(RequestContext context, String id) async {
         LIMIT 1
       ) AS main_image
     FROM products p
+    JOIN podcategories pc
+      ON pc.podcategories_id = p.subcategory_id
     WHERE p.product_id = \$1
     LIMIT 1
     ''',
@@ -82,7 +86,8 @@ Future<Response> onRequest(RequestContext context, String id) async {
       'currency': r[4],
       'category_id': r[5],
       'seller_id': r[6],
-      'main_image': r[7],
+      'subcategory_id': r[7],
+      'main_image': r[8],
       'can_review': canReview,
     },
   );

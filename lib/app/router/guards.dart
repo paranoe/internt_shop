@@ -2,14 +2,12 @@ import 'package:diplomeprojectmobile/app/router/routes.dart';
 import 'package:diplomeprojectmobile/features/auth/presentation/controllers/auth_state.dart';
 
 class RouteGuards {
-  RouteGuards._();
-
-  static String _homeByRole(String? role) {
-    switch ((role ?? '').toLowerCase()) {
-      case 'seller':
-        return AppRoutes.sellerDashboard;
+  static String homeByRole(String? role) {
+    switch (role?.toLowerCase()) {
       case 'admin':
         return AppRoutes.adminDashboard;
+      case 'seller':
+        return AppRoutes.sellerDashboard;
       case 'buyer':
       default:
         return AppRoutes.buyerHome;
@@ -22,24 +20,30 @@ class RouteGuards {
     required String? role,
   }) {
     final isAuthPage =
-        location == AppRoutes.login || location == AppRoutes.register;
+        location == AppRoutes.login ||
+        location == AppRoutes.register ||
+        location == AppRoutes.verifyEmail ||
+        location == AppRoutes.forgotPassword ||
+        location == AppRoutes.resetPassword;
+
     final isSplash = location == AppRoutes.splash;
 
-    if (status == AuthStatus.loading || status == AuthStatus.initial) {
+    if (status == AuthStatus.initial || status == AuthStatus.loading) {
       return isSplash ? null : AppRoutes.splash;
     }
 
     if (status == AuthStatus.unauthenticated || status == AuthStatus.error) {
-      return isAuthPage ? null : AppRoutes.login;
+      if (isAuthPage) return null;
+      return AppRoutes.login;
     }
 
     if (status == AuthStatus.authenticated) {
-      final target = _homeByRole(role);
-      if (isSplash || isAuthPage) return target;
+      if (isSplash || isAuthPage) {
+        return homeByRole(role);
+      }
+      return null;
     }
 
-    return null;
+    return AppRoutes.login;
   }
-
-  static String homeByRole(String? role) => _homeByRole(role);
 }

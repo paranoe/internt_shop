@@ -154,6 +154,18 @@ class _LoginScreenState extends State<LoginScreen> {
                                       )
                                     : const Text('Войти'),
                               ),
+                              const SizedBox(height: 12),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton(
+                                  onPressed: isLoading
+                                      ? null
+                                      : () => context.push(
+                                          AppRoutes.forgotPassword,
+                                        ),
+                                  child: const Text('Забыли пароль?'),
+                                ),
+                              ),
                             ],
                           ),
                         ),

@@ -33,7 +33,7 @@ Future<Response> onRequest(RequestContext context) async {
   }
 
   if (categoryId != null) {
-    where.add('p.category_id = \$${params.length + 1}');
+    where.add('pc.category_id = \$${params.length + 1}');
     params.add(categoryId);
   }
 
@@ -140,6 +140,8 @@ Future<Response> onRequest(RequestContext context) async {
     '''
     SELECT COUNT(*)
     FROM products p
+    JOIN podcategories pc
+      ON pc.podcategories_id = p.subcategory_id
     $whereSql
     ''',
     parameters: params,
@@ -159,7 +161,7 @@ Future<Response> onRequest(RequestContext context) async {
       p.price,
       p.currency,
       p.quantity,
-      p.category_id,
+      pc.category_id,
       p.subcategory_id,
       p.seller_id,
       COALESCE((
@@ -175,6 +177,8 @@ Future<Response> onRequest(RequestContext context) async {
         LIMIT 1
       ) AS main_image
     FROM products p
+    JOIN podcategories pc
+      ON pc.podcategories_id = p.subcategory_id
     $whereSql
     $orderBySql
     LIMIT \$$limitPos OFFSET \$$offsetPos

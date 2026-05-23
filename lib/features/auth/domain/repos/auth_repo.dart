@@ -4,7 +4,7 @@ import 'package:diplomeprojectmobile/features/auth/domain/entities/user.dart';
 abstract class AuthRepo {
   Future<AuthTokens> login({required String email, required String password});
 
-  Future<AuthTokens> register({
+  Future<void> register({
     required String email,
     required String password,
     required String role,

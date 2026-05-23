@@ -53,11 +53,6 @@ class SellerApi {
     return _extractItems(response.data);
   }
 
-  Future<List<Map<String, dynamic>>> getMeasurementUnits() async {
-    final response = await _dioClient.dio.get('/measurement-units');
-    return _extractItems(response.data);
-  }
-
   Future<List<Map<String, dynamic>>> getSubcategoryParameters({
     required int categoryId,
     required int subcategoryId,
@@ -85,7 +80,6 @@ class SellerApi {
     final response = await _dioClient.dio.post(
       ApiEndpoints.sellerProducts,
       data: {
-        'category_id': categoryId,
         'subcategory_id': subcategoryId,
         'name': name,
         'description': description,
@@ -110,10 +104,6 @@ class SellerApi {
     String? currency,
   }) async {
     final body = <String, dynamic>{};
-
-    if (categoryId != null) {
-      body['category_id'] = categoryId;
-    }
 
     if (subcategoryId != null) {
       body['subcategory_id'] = subcategoryId;
@@ -207,6 +197,11 @@ class SellerApi {
     );
 
     return Map<String, dynamic>.from(response.data as Map);
+  }
+
+  Future<List<Map<String, dynamic>>> getMeasurementUnits() async {
+    final response = await _dioClient.dio.get('/measurement-units');
+    return _extractItems(response.data);
   }
 
   Future<void> updateOrderStatus({

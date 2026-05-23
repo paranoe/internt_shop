@@ -1,16 +1,19 @@
 class AppRoutes {
-  AppRoutes._();
-
   static const splash = '/';
   static const login = '/login';
   static const register = '/register';
 
+  static const verifyEmail = '/verify-email';
+  static const forgotPassword = '/forgot-password';
+  static const resetPassword = '/reset-password';
+
   static const buyerHome = '/buyer/home';
   static const buyerCategories = '/buyer/categories';
+  static const buyerCategoryDetails = '/buyer/category';
+  static const buyerProducts = '/buyer/products';
   static const buyerCart = '/buyer/cart';
   static const buyerOrders = '/buyer/orders';
   static const buyerProfile = '/buyer/profile';
-  static const buyerProducts = '/buyer/products';
   static const buyerProductDetails = '/buyer/product';
   static const buyerCheckout = '/buyer/checkout';
   static const buyerOrderSuccess = '/buyer/order-success';
@@ -18,7 +21,6 @@ class AppRoutes {
   static const editProfile = '/buyer/profile/edit';
   static const buyerProductReviews = '/buyer/product-reviews';
   static const buyerAddReview = '/buyer/add-review';
-  static const buyerCategoryDetails = '/buyer/category';
   static const buyerFavorites = '/buyer/favorites';
 
   static const sellerDashboard = '/seller/dashboard';

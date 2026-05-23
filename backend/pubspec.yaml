@@ -9,9 +9,10 @@ environment:
 dependencies:
   bcrypt: ^1.2.0
   cryptography: ^2.9.0
-  dart_frog: ^1.2.10
+  dart_frog: ^1.2.6
   dart_frog_auth: ^1.2.2
   dart_jsonwebtoken: ^3.3.2
+  mailer: ^7.1.0
   postgres: ^3.5.9
   redis_dart_client: ^1.0.0
 

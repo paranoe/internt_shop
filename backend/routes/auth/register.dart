@@ -2,11 +2,11 @@
 
 import 'package:dart_frog/dart_frog.dart';
 
-import 'package:backend/src/core/security/jwt_service.dart';
+import 'package:backend/src/core/security/email_code_generator.dart';
 import 'package:backend/src/core/security/password_hasher.dart';
-import 'package:backend/src/core/security/refresh_token_service.dart';
 import 'package:backend/src/db/postgres_pool.dart';
-import 'package:backend/src/integrations/redis/session_store.dart';
+import 'package:backend/src/integrations/email/email_service.dart';
+import 'package:backend/src/integrations/redis/email_code_store.dart';
 
 Future<Response> onRequest(RequestContext context) async {
   if (context.request.method != HttpMethod.post) {
@@ -90,8 +90,8 @@ Future<Response> onRequest(RequestContext context) async {
   try {
     final inserted = await conn.execute(
       '''
-      INSERT INTO users (email, password_hash, role_id, created_at)
-      VALUES (\$1, \$2, \$3, now())
+      INSERT INTO users (email, password_hash, role_id, email_verified, created_at)
+      VALUES (\$1, \$2, \$3, false, now())
       RETURNING user_id
       ''',
       parameters: [email, passwordHash, roleId],
@@ -115,28 +115,18 @@ Future<Response> onRequest(RequestContext context) async {
 
     await conn.execute('COMMIT');
 
-    final accessToken = JwtService.generateAccessToken(
-      userId: userId,
-      role: role,
-    );
+    final code = EmailCodeGenerator.generate();
+    final codeStore = EmailCodeStore();
+    await codeStore.saveVerifyCode(email: email, code: code);
 
-    final refresh = RefreshTokenService.generate(
-      userId: userId,
-      role: role,
-    );
-
-    final sessionStore = SessionStore();
-    await sessionStore.saveRefreshSession(
-      sessionId: refresh.sessionId,
-      userId: userId,
-      role: role,
-    );
+    final emailService = EmailService();
+    await emailService.sendVerificationCode(email: email, code: code);
 
     return Response.json(
       statusCode: 201,
       body: {
-        'access_token': accessToken,
-        'refresh_token': refresh.token,
+        'message': 'Verification code sent',
+        'email': email,
         'user_id': userId,
         'role': role,
       },

@@ -1,6 +1,6 @@
 ﻿import 'dart:convert';
-
 import 'package:dart_frog/dart_frog.dart';
+
 import 'package:backend/src/core/security/auth_user.dart';
 import 'package:backend/src/db/postgres_pool.dart';
 
@@ -14,10 +14,9 @@ String _toStringValue(dynamic value, {String fallback = ''}) {
   return text.isEmpty ? fallback : text;
 }
 
-Future<int?> _resolveSellerId(
-  dynamic conn,
-  int userId,
-) async {
+Future<int?> _resolveSellerId(PostgresClient db, int userId) async {
+  final conn = await db.connection;
+
   final rows = await conn.execute(
     '''
     SELECT seller_id
@@ -28,16 +27,16 @@ Future<int?> _resolveSellerId(
     parameters: [userId],
   );
 
-  if (rows.length == 0) return null;
+  if (rows.isEmpty) return null;
   return _toInt(rows.first[0]);
 }
 
 Future<Response> onRequest(RequestContext context) async {
-  final user = context.read<AuthUser>();
+  final auth = context.read<AuthUser>();
   final db = context.read<PostgresClient>();
   final conn = await db.connection;
 
-  final sellerId = await _resolveSellerId(conn, user.userId);
+  final sellerId = await _resolveSellerId(db, auth.userId);
   if (sellerId == null) {
     return Response.json(
       statusCode: 403,
@@ -47,71 +46,44 @@ Future<Response> onRequest(RequestContext context) async {
 
   switch (context.request.method) {
     case HttpMethod.get:
-      final qp = context.request.uri.queryParameters;
-
-      final page = _toInt(qp['page'], fallback: 1);
-      final limit = _toInt(qp['limit'], fallback: 20);
-      final q = _toStringValue(qp['q']);
-
-      final safePage = page < 1 ? 1 : page;
-      final safeLimit = limit < 1 ? 20 : (limit > 100 ? 100 : limit);
-      final offset = (safePage - 1) * safeLimit;
-
-      final countRows = await conn.execute(
-        '''
-        SELECT COUNT(*)
-        FROM products
-        WHERE seller_id = \$1
-          AND (\$2 = '' OR name ILIKE '%' || \$2 || '%')
-        ''',
-        parameters: [sellerId, q],
-      );
-
-      final total = _toInt(countRows.first[0]);
-
       final rows = await conn.execute(
         '''
         SELECT
-          product_id,
-          seller_id,
-          category_id,
-          subcategory_id,
-          name,
-          description,
-          price,
-          currency,
-          quantity,
-          created_at
-        FROM products
-        WHERE seller_id = \$1
-          AND (\$2 = '' OR name ILIKE '%' || \$2 || '%')
-        ORDER BY product_id DESC
-        LIMIT \$3 OFFSET \$4
+          p.product_id,
+          p.seller_id,
+          s.category_id,
+          p.subcategory_id,
+          p.name,
+          p.description,
+          p.price,
+          p.currency,
+          p.quantity,
+          p.created_at
+        FROM products p
+        JOIN podcategories s
+          ON s.podcategories_id = p.subcategory_id
+        WHERE p.seller_id = \$1
+        ORDER BY p.product_id DESC
         ''',
-        parameters: [sellerId, q, safeLimit, offset],
+        parameters: [sellerId],
       );
 
       return Response.json(
         body: {
-          'page': safePage,
-          'limit': safeLimit,
-          'total': total,
-          'items': rows
-              .map(
-                (row) => {
-                  'product_id': row[0],
-                  'seller_id': row[1],
-                  'category_id': row[2],
-                  'subcategory_id': row[3],
-                  'name': row[4],
-                  'description': row[5],
-                  'price': row[6].toString(),
-                  'currency': row[7],
-                  'quantity': row[8],
-                  'created_at': row[9]?.toString(),
-                },
-              )
-              .toList(),
+          'items': rows.map((row) {
+            return {
+              'product_id': row[0],
+              'seller_id': row[1],
+              'category_id': row[2],
+              'subcategory_id': row[3],
+              'name': row[4],
+              'description': row[5],
+              'price': row[6].toString(),
+              'currency': row[7],
+              'quantity': row[8],
+              'created_at': row[9]?.toString(),
+            };
+          }).toList(),
         },
       );
 
@@ -119,20 +91,12 @@ Future<Response> onRequest(RequestContext context) async {
       final raw = await context.request.body();
       final data = jsonDecode(raw) as Map<String, dynamic>;
 
-      final categoryId = _toInt(data['category_id']);
       final subcategoryId = _toInt(data['subcategory_id']);
       final name = _toStringValue(data['name']);
       final description = _toStringValue(data['description']);
       final priceRaw = _toStringValue(data['price']);
       final currency = _toStringValue(data['currency'], fallback: 'BYN');
       final quantity = _toInt(data['quantity'], fallback: 0);
-
-      if (categoryId <= 0) {
-        return Response.json(
-          statusCode: 400,
-          body: {'error': 'category_id is required'},
-        );
-      }
 
       if (subcategoryId <= 0) {
         return Response.json(
@@ -170,32 +134,14 @@ Future<Response> onRequest(RequestContext context) async {
         );
       }
 
-      final categoryRows = await conn.execute(
-        '''
-        SELECT category_id
-        FROM categories
-        WHERE category_id = \$1
-        LIMIT 1
-        ''',
-        parameters: [categoryId],
-      );
-
-      if (categoryRows.isEmpty) {
-        return Response.json(
-          statusCode: 404,
-          body: {'error': 'Category not found'},
-        );
-      }
-
       final subcategoryRows = await conn.execute(
         '''
-        SELECT podcategories_id
+        SELECT podcategories_id, category_id
         FROM podcategories
         WHERE podcategories_id = \$1
-          AND category_id = \$2
         LIMIT 1
         ''',
-        parameters: [subcategoryId, categoryId],
+        parameters: [subcategoryId],
       );
 
       if (subcategoryRows.isEmpty) {
@@ -209,7 +155,6 @@ Future<Response> onRequest(RequestContext context) async {
         '''
         INSERT INTO products (
           seller_id,
-          category_id,
           subcategory_id,
           name,
           description,
@@ -217,11 +162,10 @@ Future<Response> onRequest(RequestContext context) async {
           currency,
           quantity
         )
-        VALUES (\$1, \$2, \$3, \$4, \$5, \$6::numeric, \$7, \$8)
+        VALUES (\$1, \$2, \$3, \$4, \$5::numeric, \$6, \$7)
         RETURNING
           product_id,
           seller_id,
-          category_id,
           subcategory_id,
           name,
           description,
@@ -232,7 +176,6 @@ Future<Response> onRequest(RequestContext context) async {
         ''',
         parameters: [
           sellerId,
-          categoryId,
           subcategoryId,
           name,
           description.isEmpty ? null : description,
@@ -243,20 +186,21 @@ Future<Response> onRequest(RequestContext context) async {
       );
 
       final row = inserted.first;
+      final categoryId = subcategoryRows.first[1];
 
       return Response.json(
         statusCode: 201,
         body: {
           'product_id': row[0],
           'seller_id': row[1],
-          'category_id': row[2],
-          'subcategory_id': row[3],
-          'name': row[4],
-          'description': row[5],
-          'price': row[6].toString(),
-          'currency': row[7],
-          'quantity': row[8],
-          'created_at': row[9]?.toString(),
+          'category_id': categoryId,
+          'subcategory_id': row[2],
+          'name': row[3],
+          'description': row[4],
+          'price': row[5].toString(),
+          'currency': row[6],
+          'quantity': row[7],
+          'created_at': row[8]?.toString(),
         },
       );
 

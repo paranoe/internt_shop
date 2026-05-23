@@ -23,7 +23,7 @@ class AuthApi {
     );
   }
 
-  Future<AuthTokensModel> register({
+  Future<void> register({
     required String email,
     required String password,
     required String role,
@@ -39,13 +39,38 @@ class AuthApi {
       body['shop_name'] = shopName.trim();
     }
 
-    final response = await _dioClient.dio.post(
-      ApiEndpoints.register,
-      data: body,
-    );
+    await _dioClient.dio.post(ApiEndpoints.register, data: body);
+  }
 
-    return AuthTokensModel.fromJson(
-      Map<String, dynamic>.from(response.data as Map),
+  Future<void> verifyEmail({
+    required String email,
+    required String code,
+  }) async {
+    await _dioClient.dio.post(
+      '/auth/verify-email',
+      data: {'email': email, 'code': code},
+    );
+  }
+
+  Future<void> resendVerificationCode({required String email}) async {
+    await _dioClient.dio.post(
+      '/auth/resend-verification-code',
+      data: {'email': email},
+    );
+  }
+
+  Future<void> forgotPassword({required String email}) async {
+    await _dioClient.dio.post('/auth/forgot-password', data: {'email': email});
+  }
+
+  Future<void> resetPassword({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) async {
+    await _dioClient.dio.post(
+      '/auth/reset-password',
+      data: {'email': email, 'code': code, 'new_password': newPassword},
     );
   }
 

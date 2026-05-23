@@ -18,7 +18,7 @@ Future<Response> onRequest(RequestContext context) async {
   final data = (raw.isEmpty ? <String, dynamic>{} : jsonDecode(raw))
       as Map<String, dynamic>;
 
-  final email = data['email']?.toString().trim();
+  final email = data['email']?.toString().trim().toLowerCase();
   final password = data['password']?.toString();
 
   if (email == null || email.isEmpty || password == null || password.isEmpty) {
@@ -36,7 +36,8 @@ Future<Response> onRequest(RequestContext context) async {
       u.user_id,
       u.password_hash,
       r.name,
-      COALESCE(u.is_blocked, false) AS is_blocked
+      COALESCE(u.is_blocked, false) AS is_blocked,
+      COALESCE(u.email_verified, false) AS email_verified
     FROM users u
     JOIN roles r ON r.role_id = u.role_id
     WHERE u.email = \$1
@@ -57,11 +58,19 @@ Future<Response> onRequest(RequestContext context) async {
   final passwordHash = row[1].toString();
   final role = row[2].toString();
   final isBlocked = row[3] == true;
+  final emailVerified = row[4] == true;
 
   if (isBlocked) {
     return Response.json(
       statusCode: 403,
       body: {'error': 'User is blocked'},
+    );
+  }
+
+  if (!emailVerified) {
+    return Response.json(
+      statusCode: 403,
+      body: {'error': 'Email is not verified'},
     );
   }
 

@@ -1,6 +1,6 @@
 ﻿import 'dart:convert';
-
 import 'package:dart_frog/dart_frog.dart';
+
 import 'package:backend/src/core/security/auth_user.dart';
 import 'package:backend/src/db/postgres_pool.dart';
 
@@ -14,10 +14,9 @@ String _toStringValue(dynamic value, {String fallback = ''}) {
   return text.isEmpty ? fallback : text;
 }
 
-Future<int?> _resolveSellerId(
-  dynamic conn,
-  int userId,
-) async {
+Future<int?> _resolveSellerId(PostgresClient db, int userId) async {
+  final conn = await db.connection;
+
   final rows = await conn.execute(
     '''
     SELECT seller_id
@@ -28,24 +27,16 @@ Future<int?> _resolveSellerId(
     parameters: [userId],
   );
 
-  if (rows.length == 0) return null;
+  if (rows.isEmpty) return null;
   return _toInt(rows.first[0]);
 }
 
 Future<Response> onRequest(RequestContext context, String id) async {
-  final productId = int.tryParse(id);
-  if (productId == null) {
-    return Response.json(
-      statusCode: 400,
-      body: {'error': 'Invalid product id'},
-    );
-  }
-
-  final user = context.read<AuthUser>();
+  final auth = context.read<AuthUser>();
   final db = context.read<PostgresClient>();
   final conn = await db.connection;
 
-  final sellerId = await _resolveSellerId(conn, user.userId);
+  final sellerId = await _resolveSellerId(db, auth.userId);
   if (sellerId == null) {
     return Response.json(
       statusCode: 403,
@@ -53,17 +44,121 @@ Future<Response> onRequest(RequestContext context, String id) async {
     );
   }
 
+  final productId = int.tryParse(id);
+  if (productId == null || productId <= 0) {
+    return Response.json(
+      statusCode: 400,
+      body: {'error': 'Invalid product id'},
+    );
+  }
+
   switch (context.request.method) {
+    case HttpMethod.get:
+      final rows = await conn.execute(
+        '''
+        SELECT
+          p.product_id,
+          p.seller_id,
+          s.category_id,
+          p.subcategory_id,
+          p.name,
+          p.description,
+          p.price,
+          p.currency,
+          p.quantity,
+          p.created_at
+        FROM products p
+        JOIN podcategories s
+          ON s.podcategories_id = p.subcategory_id
+        WHERE p.product_id = \$1
+          AND p.seller_id = \$2
+        LIMIT 1
+        ''',
+        parameters: [productId, sellerId],
+      );
+
+      if (rows.isEmpty) {
+        return Response.json(
+          statusCode: 404,
+          body: {'error': 'Product not found'},
+        );
+      }
+
+      final row = rows.first;
+
+      return Response.json(
+        body: {
+          'product_id': row[0],
+          'seller_id': row[1],
+          'category_id': row[2],
+          'subcategory_id': row[3],
+          'name': row[4],
+          'description': row[5],
+          'price': row[6].toString(),
+          'currency': row[7],
+          'quantity': row[8],
+          'created_at': row[9]?.toString(),
+        },
+      );
+
     case HttpMethod.patch:
+      final exists = await conn.execute(
+        '''
+        SELECT 1
+        FROM products
+        WHERE product_id = \$1
+          AND seller_id = \$2
+        LIMIT 1
+        ''',
+        parameters: [productId, sellerId],
+      );
+
+      if (exists.isEmpty) {
+        return Response.json(
+          statusCode: 404,
+          body: {'error': 'Product not found'},
+        );
+      }
+
       final raw = await context.request.body();
-      final data = jsonDecode(raw) as Map<String, dynamic>;
+      final data = (raw.isEmpty ? <String, dynamic>{} : jsonDecode(raw))
+          as Map<String, dynamic>;
 
       final updates = <String>[];
       final parameters = <dynamic>[];
       var index = 1;
 
-      int? newCategoryId;
-      int? newSubcategoryId;
+      if (data.containsKey('subcategory_id')) {
+        final subcategoryId = _toInt(data['subcategory_id']);
+
+        if (subcategoryId <= 0) {
+          return Response.json(
+            statusCode: 400,
+            body: {'error': 'subcategory_id must be valid'},
+          );
+        }
+
+        final subcategoryRows = await conn.execute(
+          '''
+          SELECT podcategories_id
+          FROM podcategories
+          WHERE podcategories_id = \$1
+          LIMIT 1
+          ''',
+          parameters: [subcategoryId],
+        );
+
+        if (subcategoryRows.isEmpty) {
+          return Response.json(
+            statusCode: 404,
+            body: {'error': 'Subcategory not found'},
+          );
+        }
+
+        updates.add('subcategory_id = \$$index');
+        parameters.add(subcategoryId);
+        index++;
+      }
 
       if (data.containsKey('name')) {
         final name = _toStringValue(data['name']);
@@ -87,8 +182,10 @@ Future<Response> onRequest(RequestContext context, String id) async {
       }
 
       if (data.containsKey('price')) {
-        final priceRaw = _toStringValue(data['price']).replaceAll(',', '.');
-        if (priceRaw.isEmpty || double.tryParse(priceRaw) == null) {
+        final priceRaw = _toStringValue(data['price']);
+        final normalizedPrice = priceRaw.replaceAll(',', '.');
+
+        if (priceRaw.isEmpty || double.tryParse(normalizedPrice) == null) {
           return Response.json(
             statusCode: 400,
             body: {'error': 'price must be numeric'},
@@ -96,7 +193,7 @@ Future<Response> onRequest(RequestContext context, String id) async {
         }
 
         updates.add('price = \$$index::numeric');
-        parameters.add(priceRaw);
+        parameters.add(normalizedPrice);
         index++;
       }
 
@@ -128,99 +225,6 @@ Future<Response> onRequest(RequestContext context, String id) async {
         index++;
       }
 
-      if (data.containsKey('category_id')) {
-        final categoryId = _toInt(data['category_id']);
-        if (categoryId <= 0) {
-          return Response.json(
-            statusCode: 400,
-            body: {'error': 'category_id must be valid'},
-          );
-        }
-        newCategoryId = categoryId;
-      }
-
-      if (data.containsKey('subcategory_id')) {
-        final subcategoryId = _toInt(data['subcategory_id']);
-        if (subcategoryId <= 0) {
-          return Response.json(
-            statusCode: 400,
-            body: {'error': 'subcategory_id must be valid'},
-          );
-        }
-        newSubcategoryId = subcategoryId;
-      }
-
-      if (newCategoryId != null) {
-        final categoryRows = await conn.execute(
-          '''
-          SELECT category_id
-          FROM categories
-          WHERE category_id = \$1
-          LIMIT 1
-          ''',
-          parameters: [newCategoryId],
-        );
-
-        if (categoryRows.isEmpty) {
-          return Response.json(
-            statusCode: 404,
-            body: {'error': 'Category not found'},
-          );
-        }
-
-        updates.add('category_id = \$$index');
-        parameters.add(newCategoryId);
-        index++;
-      }
-
-      if (newSubcategoryId != null) {
-        int categoryForCheck = newCategoryId ?? 0;
-
-        if (categoryForCheck <= 0) {
-          final currentRows = await conn.execute(
-            '''
-            SELECT category_id
-            FROM products
-            WHERE product_id = \$1
-              AND seller_id = \$2
-            LIMIT 1
-            ''',
-            parameters: [productId, sellerId],
-          );
-
-          if (currentRows.isEmpty) {
-            return Response.json(
-              statusCode: 404,
-              body: {'error': 'Product not found'},
-            );
-          }
-
-          categoryForCheck = _toInt(currentRows.first[0]);
-        }
-
-        final subcategoryRows = await conn.execute(
-          '''
-          SELECT podcategories_id
-          FROM podcategories
-          WHERE podcategories_id = \$1
-            AND category_id = \$2
-          LIMIT 1
-          ''',
-          parameters: [newSubcategoryId, categoryForCheck],
-        );
-
-        if (subcategoryRows.isEmpty) {
-          return Response.json(
-            statusCode: 404,
-            body: {'error': 'Subcategory not found'},
-          );
-        }
-
-        updates.add('subcategory_id = \$$index');
-        parameters.add(newSubcategoryId);
-        index++;
-      }
-
       if (updates.isEmpty) {
         return Response.json(
           statusCode: 400,
@@ -229,22 +233,17 @@ Future<Response> onRequest(RequestContext context, String id) async {
       }
 
       parameters.add(productId);
-      final productIdParam = index;
-      index++;
-
       parameters.add(sellerId);
-      final sellerIdParam = index;
 
-      final updated = await conn.execute(
+      final rows = await conn.execute(
         '''
         UPDATE products
         SET ${updates.join(', ')}
-        WHERE product_id = \$$productIdParam
-          AND seller_id = \$$sellerIdParam
+        WHERE product_id = \$$index
+          AND seller_id = \$${index + 1}
         RETURNING
           product_id,
           seller_id,
-          category_id,
           subcategory_id,
           name,
           description,
@@ -256,27 +255,39 @@ Future<Response> onRequest(RequestContext context, String id) async {
         parameters: parameters,
       );
 
-      if (updated.isEmpty) {
+      if (rows.isEmpty) {
         return Response.json(
           statusCode: 404,
           body: {'error': 'Product not found'},
         );
       }
 
-      final row = updated.first;
+      final row = rows.first;
+
+      final categoryRows = await conn.execute(
+        '''
+        SELECT category_id
+        FROM podcategories
+        WHERE podcategories_id = \$1
+        LIMIT 1
+        ''',
+        parameters: [row[2]],
+      );
+
+      final categoryId = categoryRows.isEmpty ? null : categoryRows.first[0];
 
       return Response.json(
         body: {
           'product_id': row[0],
           'seller_id': row[1],
-          'category_id': row[2],
-          'subcategory_id': row[3],
-          'name': row[4],
-          'description': row[5],
-          'price': row[6].toString(),
-          'currency': row[7],
-          'quantity': row[8],
-          'created_at': row[9]?.toString(),
+          'category_id': categoryId,
+          'subcategory_id': row[2],
+          'name': row[3],
+          'description': row[4],
+          'price': row[5].toString(),
+          'currency': row[6],
+          'quantity': row[7],
+          'created_at': row[8]?.toString(),
         },
       );
 

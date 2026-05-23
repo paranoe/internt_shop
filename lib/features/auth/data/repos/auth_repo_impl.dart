@@ -14,7 +14,7 @@ class AuthRepoImpl implements AuthRepo {
   }
 
   @override
-  Future<AuthTokens> register({
+  Future<void> register({
     required String email,
     required String password,
     required String role,

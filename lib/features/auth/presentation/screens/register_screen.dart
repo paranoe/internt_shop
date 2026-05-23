@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:diplomeprojectmobile/app/router/guards.dart';
 import 'package:diplomeprojectmobile/app/theme/colors.dart';
 import 'package:diplomeprojectmobile/core/utils/validators.dart';
 import 'package:diplomeprojectmobile/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:diplomeprojectmobile/features/auth/presentation/controllers/auth_state.dart';
+import 'package:diplomeprojectmobile/features/auth/presentation/screens/verify_email_screen.dart';
 import 'package:diplomeprojectmobile/features/auth/presentation/widgets/auth_header.dart';
 import 'package:diplomeprojectmobile/features/auth/presentation/widgets/password_field.dart';
 
@@ -27,6 +27,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _shopNameController = TextEditingController();
 
   RegisterRole _selectedRole = RegisterRole.buyer;
+  bool _isSubmitting = false;
 
   @override
   void dispose() {
@@ -40,8 +41,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String? _confirmValidator(String? value) {
     final base = Validators.password(value);
     if (base != null) return base;
-
-    if (value != _passwordController.text.trim()) {
+    if ((value ?? '').trim() != _passwordController.text.trim()) {
       return 'Пароли не совпадают';
     }
     return null;
@@ -57,17 +57,49 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _submit() async {
     final valid = _formKey.currentState?.validate() ?? false;
-    if (!valid) return;
+    print('REGISTER SUBMIT CLICK');
+    print('REGISTER FORM VALID = $valid');
+    if (!valid || _isSubmitting) return;
 
+    final email = _emailController.text.trim();
     final role = _selectedRole == RegisterRole.seller ? 'seller' : 'buyer';
 
-    await context.read<AuthController>().register(
-      email: _emailController.text.trim(),
+    final authController = context.read<AuthController>();
+    final rootNavigator = Navigator.of(context, rootNavigator: true);
+    final messenger = ScaffoldMessenger.of(context);
+
+    setState(() => _isSubmitting = true);
+
+    print('REGISTER REQUEST EMAIL = $email');
+    print('REGISTER REQUEST ROLE = $role');
+
+    final ok = await authController.register(
+      email: email,
       password: _passwordController.text.trim(),
       role: role,
       shopName: _selectedRole == RegisterRole.seller
           ? _shopNameController.text.trim()
           : null,
+    );
+
+    print('REGISTER RESULT = $ok');
+
+    if (mounted) {
+      setState(() => _isSubmitting = false);
+    }
+
+    if (!ok) {
+      final error = authController.state.errorMessage;
+      if (error != null && error.isNotEmpty) {
+        messenger.showSnackBar(SnackBar(content: Text(error)));
+      }
+      return;
+    }
+
+    print('OPEN VERIFY SCREEN NOW');
+
+    await rootNavigator.push(
+      MaterialPageRoute(builder: (_) => VerifyEmailScreen(initialEmail: email)),
     );
   }
 
@@ -127,12 +159,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocConsumer<AuthController, AuthState>(
+    return BlocListener<AuthController, AuthState>(
       listener: (context, state) {
-        if (state.status == AuthStatus.authenticated) {
-          context.go(RouteGuards.homeByRole(state.user?.role));
-        }
-
         if (state.status == AuthStatus.error &&
             (state.errorMessage?.isNotEmpty ?? false)) {
           ScaffoldMessenger.of(
@@ -140,148 +168,136 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ).showSnackBar(SnackBar(content: Text(state.errorMessage!)));
         }
       },
-      builder: (context, state) {
-        final isLoading = state.status == AuthStatus.loading;
-
-        return Scaffold(
-          body: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFFF8FAFC), Color(0xFFF5F3FF)],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
+      child: Scaffold(
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFFF8FAFC), Color(0xFFF5F3FF)],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
             ),
-            child: SafeArea(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 12,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    IconButton(
-                      onPressed: isLoading ? null : () => context.pop(),
-                      icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          ),
+          child: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  IconButton(
+                    onPressed: _isSubmitting ? null : () => context.pop(),
+                    icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                  ),
+                  const SizedBox(height: 8),
+                  const AuthHeader(
+                    title: 'Создать аккаунт',
+                    subtitle: 'Выберите роль и зарегистрируйтесь в приложении',
+                  ),
+                  const SizedBox(height: 24),
+                  _roleCard(
+                    title: 'Покупатель',
+                    subtitle: 'Покупки, корзина, заказы, отзывы',
+                    icon: Icons.shopping_bag_outlined,
+                    selected: _selectedRole == RegisterRole.buyer,
+                    onTap: () {
+                      setState(() => _selectedRole = RegisterRole.buyer);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  _roleCard(
+                    title: 'Продавец',
+                    subtitle: 'Товары, управление магазином, заказы',
+                    icon: Icons.storefront_outlined,
+                    selected: _selectedRole == RegisterRole.seller,
+                    onTap: () {
+                      setState(() => _selectedRole = RegisterRole.seller);
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(28),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: AppColors.shadow,
+                          blurRadius: 24,
+                          offset: Offset(0, 12),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 8),
-                    const AuthHeader(
-                      title: 'Создать аккаунт',
-                      subtitle:
-                          'Выберите роль и зарегистрируйтесь в приложении',
-                    ),
-                    const SizedBox(height: 24),
-                    _roleCard(
-                      title: 'Покупатель',
-                      subtitle: 'Покупки, корзина, заказы, отзывы',
-                      icon: Icons.shopping_bag_outlined,
-                      selected: _selectedRole == RegisterRole.buyer,
-                      onTap: () {
-                        setState(() {
-                          _selectedRole = RegisterRole.buyer;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    _roleCard(
-                      title: 'Продавец',
-                      subtitle: 'Товары, управление магазином, заказы',
-                      icon: Icons.storefront_outlined,
-                      selected: _selectedRole == RegisterRole.seller,
-                      onTap: () {
-                        setState(() {
-                          _selectedRole = RegisterRole.seller;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 20),
-                    Container(
-                      padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(28),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: AppColors.shadow,
-                            blurRadius: 24,
-                            offset: Offset(0, 12),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        children: [
+                          if (_selectedRole == RegisterRole.seller) ...[
+                            TextFormField(
+                              controller: _shopNameController,
+                              validator: _shopNameValidator,
+                              decoration: const InputDecoration(
+                                labelText: 'Название магазина',
+                                prefixIcon: Icon(
+                                  Icons.store_mall_directory_outlined,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                          TextFormField(
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                            validator: Validators.email,
+                            decoration: const InputDecoration(
+                              labelText: 'Email',
+                              prefixIcon: Icon(Icons.email_outlined),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          PasswordField(
+                            controller: _passwordController,
+                            validator: Validators.password,
+                          ),
+                          const SizedBox(height: 16),
+                          PasswordField(
+                            controller: _confirmPasswordController,
+                            labelText: 'Подтвердите пароль',
+                            validator: _confirmValidator,
+                          ),
+                          const SizedBox(height: 20),
+                          ElevatedButton(
+                            onPressed: _isSubmitting ? null : _submit,
+                            child: _isSubmitting
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : Text(
+                                    _selectedRole == RegisterRole.seller
+                                        ? 'Создать магазин'
+                                        : 'Зарегистрироваться',
+                                  ),
                           ),
                         ],
                       ),
-                      child: Form(
-                        key: _formKey,
-                        child: Column(
-                          children: [
-                            if (_selectedRole == RegisterRole.seller) ...[
-                              TextFormField(
-                                controller: _shopNameController,
-                                validator: _shopNameValidator,
-                                decoration: const InputDecoration(
-                                  labelText: 'Название магазина',
-                                  prefixIcon: Icon(
-                                    Icons.store_mall_directory_outlined,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                            ],
-                            TextFormField(
-                              controller: _emailController,
-                              keyboardType: TextInputType.emailAddress,
-                              validator: Validators.email,
-                              decoration: const InputDecoration(
-                                labelText: 'Email',
-                                prefixIcon: Icon(Icons.email_outlined),
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            PasswordField(
-                              controller: _passwordController,
-                              validator: Validators.password,
-                            ),
-                            const SizedBox(height: 16),
-                            PasswordField(
-                              controller: _confirmPasswordController,
-                              labelText: 'Подтвердите пароль',
-                              validator: _confirmValidator,
-                            ),
-                            const SizedBox(height: 20),
-                            ElevatedButton(
-                              onPressed: isLoading ? null : _submit,
-                              child: isLoading
-                                  ? const SizedBox(
-                                      width: 22,
-                                      height: 22,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : Text(
-                                      _selectedRole == RegisterRole.seller
-                                          ? 'Создать магазин'
-                                          : 'Зарегистрироваться',
-                                    ),
-                            ),
-                          ],
-                        ),
-                      ),
                     ),
-                    const SizedBox(height: 18),
-                    Center(
-                      child: TextButton(
-                        onPressed: isLoading ? null : () => context.pop(),
-                        child: const Text('Уже есть аккаунт? Войти'),
-                      ),
+                  ),
+                  const SizedBox(height: 18),
+                  Center(
+                    child: TextButton(
+                      onPressed: _isSubmitting ? null : () => context.pop(),
+                      child: const Text('Уже есть аккаунт? Войти'),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }

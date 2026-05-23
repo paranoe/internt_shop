@@ -1,4 +1,3 @@
-import 'package:diplomeprojectmobile/features/auth/domain/entities/auth_tokens.dart';
 import 'package:diplomeprojectmobile/features/auth/domain/repos/auth_repo.dart';
 
 class RegisterUseCase {
@@ -6,7 +5,7 @@ class RegisterUseCase {
 
   final AuthRepo _repo;
 
-  Future<AuthTokens> call({
+  Future<void> call({
     required String email,
     required String password,
     required String role,
