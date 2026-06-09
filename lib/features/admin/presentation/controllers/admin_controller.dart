@@ -307,11 +307,11 @@ class AdminController extends Cubit<AdminState> {
     }
   }
 
-  Future<bool> createPickupPoint({required int cityId}) async {
+  Future<bool> createPickupPoint({required int houseId}) async {
     emit(state.copyWith(status: AdminStatus.saving, clearError: true));
 
     try {
-      await _adminApi.createPickupPoint(cityId: cityId);
+      await _adminApi.createPickupPoint(houseId: houseId);
       await loadPickupPoints();
       return true;
     } catch (e) {
@@ -324,16 +324,70 @@ class AdminController extends Cubit<AdminState> {
 
   Future<bool> updatePickupPoint({
     required int pickupPointId,
-    required int cityId,
+    required int houseId,
   }) async {
     emit(state.copyWith(status: AdminStatus.saving, clearError: true));
 
     try {
       await _adminApi.updatePickupPoint(
         pickupPointId: pickupPointId,
-        cityId: cityId,
+        houseId: houseId,
       );
       await loadPickupPoints();
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getStreetsByCity(int cityId) async {
+    try {
+      return await _adminApi.getStreets(cityId: cityId);
+    } catch (e) {
+      emit(state.copyWith(errorMessage: e.toString()));
+      return [];
+    }
+  }
+
+  Future<bool> createStreet({
+    required int cityId,
+    required String streetName,
+  }) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.createStreet(cityId: cityId, streetName: streetName);
+      emit(state.copyWith(status: AdminStatus.success, clearError: true));
+      return true;
+    } catch (e) {
+      emit(
+        state.copyWith(status: AdminStatus.error, errorMessage: e.toString()),
+      );
+      return false;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getHousesByStreet(int streetId) async {
+    try {
+      return await _adminApi.getHouses(streetId: streetId);
+    } catch (e) {
+      emit(state.copyWith(errorMessage: e.toString()));
+      return [];
+    }
+  }
+
+  Future<bool> createHouse({
+    required int streetId,
+    required String houseNumber,
+  }) async {
+    emit(state.copyWith(status: AdminStatus.saving, clearError: true));
+
+    try {
+      await _adminApi.createHouse(streetId: streetId, houseNumber: houseNumber);
+      emit(state.copyWith(status: AdminStatus.success, clearError: true));
       return true;
     } catch (e) {
       emit(

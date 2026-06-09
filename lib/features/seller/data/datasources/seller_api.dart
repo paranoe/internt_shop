@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:dio/dio.dart';
 import 'package:diplomeprojectmobile/core/network/api_endpoints.dart';
 import 'package:diplomeprojectmobile/core/network/dio_client.dart';
 
@@ -147,6 +150,25 @@ class SellerApi {
     return _extractItems(response.data);
   }
 
+  Future<Map<String, dynamic>> uploadProductImageFile({
+    required int productId,
+    required File file,
+  }) async {
+    final bytes = await file.readAsBytes();
+
+    final response = await _dioClient.dio.post(
+      '${ApiEndpoints.sellerProducts}/$productId/upload_image',
+      data: Stream.fromIterable([bytes]),
+      options: Options(
+        headers: {
+          Headers.contentTypeHeader: _detectImageContentType(file.path),
+        },
+      ),
+    );
+
+    return Map<String, dynamic>.from(response.data as Map);
+  }
+
   Future<void> uploadProductImage({
     required int productId,
     required String imageUrl,
@@ -165,6 +187,16 @@ class SellerApi {
     await _dioClient.dio.delete(
       '${ApiEndpoints.sellerProducts}/$productId/images',
       queryParameters: {'image_id': imageId},
+    );
+  }
+
+  Future<void> setMainProductImage({
+    required int productId,
+    required int imageId,
+  }) async {
+    await _dioClient.dio.patch(
+      '${ApiEndpoints.sellerProducts}/$productId/set_main_image',
+      data: {'image_id': imageId},
     );
   }
 
@@ -212,5 +244,19 @@ class SellerApi {
       '${ApiEndpoints.sellerOrders}/$orderId',
       data: {'status': status},
     );
+  }
+
+  String _detectImageContentType(String path) {
+    final lower = path.toLowerCase();
+
+    if (lower.endsWith('.png')) {
+      return 'image/png';
+    }
+
+    if (lower.endsWith('.webp')) {
+      return 'image/webp';
+    }
+
+    return 'image/jpeg';
   }
 }

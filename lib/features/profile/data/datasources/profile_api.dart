@@ -7,6 +7,17 @@ class ProfileApi {
 
   final DioClient _dioClient;
 
+  List<Map<String, dynamic>> _extractItems(dynamic data) {
+    if (data is List) {
+      return data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    }
+
+    final map = Map<String, dynamic>.from(data as Map);
+    final items = (map['items'] as List? ?? const []);
+
+    return items.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
   Future<ProfileModel> getProfile() async {
     final response = await _dioClient.dio.get(ApiEndpoints.me);
 
@@ -39,79 +50,55 @@ class ProfileApi {
   }
 
   Future<List<Map<String, dynamic>>> getCards() async {
-    final response = await _dioClient.dio.get('${ApiEndpoints.me}/cards');
-
-    final data = Map<String, dynamic>.from(response.data as Map);
-    final items = (data['items'] as List? ?? const []);
-
-    return items.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final response = await _dioClient.dio.get('/me/cards');
+    return _extractItems(response.data);
   }
 
   Future<void> addCard(String cardNumber) async {
-    await _dioClient.dio.post(
-      '${ApiEndpoints.me}/cards',
-      data: {'card_number': cardNumber},
-    );
+    await _dioClient.dio.post('/me/cards', data: {'card_number': cardNumber});
   }
 
   Future<void> deleteCard(int cardId) async {
-    await _dioClient.dio.delete('${ApiEndpoints.me}/cards/$cardId');
+    await _dioClient.dio.delete('/me/cards/$cardId');
   }
 
+  /// Получает ТОЛЬКО сохранённые ПВЗ текущего пользователя.
+  /// Это должен быть endpoint /me/pickup-points, а не общий /pickup-points.
   Future<List<Map<String, dynamic>>> getPickupPoints() async {
-    final response = await _dioClient.dio.get(
-      '${ApiEndpoints.me}/pickup-points',
-    );
+    final response = await _dioClient.dio.get('/me/pickup-points');
 
-    final data = Map<String, dynamic>.from(response.data as Map);
-    final items = (data['items'] as List? ?? const []);
+    print('MY PICKUP POINTS RESPONSE: ${response.data}');
 
-    return items.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    return _extractItems(response.data);
   }
 
+  /// Добавляет выбранный общий ПВЗ в список ПВЗ текущего пользователя.
   Future<void> addPickupPoint(int pickupPointId) async {
     await _dioClient.dio.post(
-      '${ApiEndpoints.me}/pickup-points',
+      '/me/pickup-points',
       data: {'pickup_point_id': pickupPointId},
     );
   }
 
+  /// Удаляет сохранённый ПВЗ пользователя по user_pickup_id.
+  /// Не удаляет общий ПВЗ из таблицы pickup_points.
   Future<void> deletePickupPoint(int userPickupId) async {
-    await _dioClient.dio.delete(
-      '${ApiEndpoints.me}/pickup-points/$userPickupId',
-    );
+    await _dioClient.dio.delete('/me/pickup-points/$userPickupId');
   }
 
   Future<List<Map<String, dynamic>>> getCities() async {
     final response = await _dioClient.dio.get(ApiEndpoints.cities);
-
-    if (response.data is List) {
-      return (response.data as List)
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .toList();
-    }
-
-    final data = Map<String, dynamic>.from(response.data as Map);
-    final items = (data['items'] as List? ?? const []);
-
-    return items.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    return _extractItems(response.data);
   }
 
+  /// Общий список ПВЗ для выбора нового ПВЗ.
+  /// Это НЕ профиль пользователя, поэтому тут используется /pickup-points.
   Future<List<Map<String, dynamic>>> getPickupPointsByCity(int cityId) async {
     final response = await _dioClient.dio.get(
-      ApiEndpoints.pickupPoints,
+      '/pickup-points',
       queryParameters: {'city_id': cityId},
     );
 
-    if (response.data is List) {
-      return (response.data as List)
-          .map((e) => Map<String, dynamic>.from(e as Map))
-          .toList();
-    }
-
-    final data = Map<String, dynamic>.from(response.data as Map);
-    final items = (data['items'] as List? ?? const []);
-
-    return items.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    return _extractItems(response.data);
   }
 }

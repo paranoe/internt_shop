@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:diplomeprojectmobile/app/theme/colors.dart';
+import 'package:diplomeprojectmobile/core/network/dio_client.dart';
 import 'package:diplomeprojectmobile/core/widgets/error_view.dart';
 import 'package:diplomeprojectmobile/features/cart/domain/entities/cart_item.dart';
 import 'package:diplomeprojectmobile/features/cart/presentation/controllers/cart_controller.dart';
@@ -10,6 +11,7 @@ import 'package:diplomeprojectmobile/features/favorites/presentation/controllers
 import 'package:diplomeprojectmobile/features/favorites/presentation/controllers/favorites_state.dart';
 import 'package:diplomeprojectmobile/features/product/presentation/controllers/product_controller.dart';
 import 'package:diplomeprojectmobile/features/product/presentation/controllers/product_state.dart';
+import 'package:diplomeprojectmobile/features/product/presentation/screens/add_review_screen.dart';
 
 class ProductDetailsScreen extends StatefulWidget {
   const ProductDetailsScreen({super.key, required this.productId});
@@ -23,6 +25,9 @@ class ProductDetailsScreen extends StatefulWidget {
 class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   bool _isBusy = false;
   bool _isFavoriteBusy = false;
+  bool _canReview = false;
+  bool _isCheckingCanReview = false;
+
   int _currentImage = 0;
   final PageController _pageController = PageController();
 
@@ -34,6 +39,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       context.read<ProductController>().load(widget.productId);
       context.read<CartController>().loadCart();
       context.read<FavoritesController>().loadFavorites();
+      _loadCanReview();
     });
   }
 
@@ -45,6 +51,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
   CartItem? _findCartItem(CartState state) {
     final items = state.cart?.items ?? [];
+
     try {
       return items.firstWhere((e) => e.productId == widget.productId);
     } catch (_) {
@@ -56,6 +63,66 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     await context.read<ProductController>().load(widget.productId);
     await context.read<CartController>().loadCart();
     await context.read<FavoritesController>().loadFavorites();
+    await _loadCanReview();
+  }
+
+  Future<void> _loadCanReview() async {
+    if (_isCheckingCanReview) return;
+
+    if (mounted) {
+      setState(() {
+        _isCheckingCanReview = true;
+      });
+    }
+
+    try {
+      print('CHECK CAN REVIEW URL: /reviews product_id=${widget.productId}');
+
+      final response = await context.read<DioClient>().dio.get(
+        '/reviews',
+        queryParameters: {'product_id': widget.productId},
+      );
+
+      print('CAN REVIEW RESPONSE: ${response.data}');
+
+      final data = Map<String, dynamic>.from(response.data as Map);
+      final canReview = data['can_review'] == true;
+
+      if (!mounted) return;
+
+      setState(() {
+        _canReview = canReview;
+      });
+    } catch (e) {
+      print('CAN REVIEW ERROR: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        _canReview = false;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCheckingCanReview = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _openAddReviewScreen() async {
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => AddReviewScreen(productId: widget.productId),
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (saved == true) {
+      await context.read<ProductController>().load(widget.productId);
+      await _loadCanReview();
+    }
   }
 
   Future<void> _addToCart() async {
@@ -341,6 +408,28 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                               ),
                             ),
                           ],
+
+                          // ВРЕМЕННЫЙ DEBUG-БЛОК.
+                          // Когда убедишься, что кнопка появилась, можешь удалить Text DEBUG,
+                          // но сам if (_canReview) с кнопкой оставь.
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                const SizedBox(height: 8),
+                                if (_canReview)
+                                  FilledButton.icon(
+                                    onPressed: _openAddReviewScreen,
+                                    icon: const Icon(
+                                      Icons.rate_review_outlined,
+                                    ),
+                                    label: const Text('Оставить отзыв'),
+                                  ),
+                              ],
+                            ),
+                          ),
+
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                             child: Text(

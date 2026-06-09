@@ -1,104 +1,118 @@
 ﻿import 'dart:convert';
-import 'package:dart_frog/dart_frog.dart';
 
 import 'package:backend/src/core/security/auth_user.dart';
 import 'package:backend/src/db/postgres_pool.dart';
+import 'package:dart_frog/dart_frog.dart';
+
+int _toInt(dynamic value, {int fallback = 0}) {
+  if (value == null) return fallback;
+  return int.tryParse(value.toString()) ?? fallback;
+}
 
 Future<Response> onRequest(RequestContext context) async {
-  final user = context.read<AuthUser>();
+  final auth = context.read<AuthUser>();
   final db = context.read<PostgresClient>();
   final conn = await db.connection;
-
+  print('!!!!!!!!!!!! REAL /ME/PICKUP-POINTS ROUTE USED !!!!!!!!!!!!');
   switch (context.request.method) {
     case HttpMethod.get:
       final rows = await conn.execute(
         '''
         SELECT
           upp.user_pickup_id,
-          pp.pickup_point_id,
-          pp.city_id,
+          upp.user_id,
+          upp.pickup_point_id,
+          pp.house_id,
+          h.house_number,
+          s.street_id,
+          s.street_name,
+          c.city_id,
           c.city_name
         FROM user_pickup_points upp
         JOIN pickup_points pp ON pp.pickup_point_id = upp.pickup_point_id
-        JOIN cities c ON c.city_id = pp.city_id
+        JOIN houses h ON h.house_id = pp.house_id
+        JOIN streets s ON s.street_id = h.street_id
+        JOIN cities c ON c.city_id = s.city_id
         WHERE upp.user_id = \$1
         ORDER BY upp.user_pickup_id DESC
         ''',
-        parameters: [user.userId],
+        parameters: [auth.userId],
       );
+
+      final items = rows.map((row) {
+        final streetName = row[6]?.toString() ?? '';
+        final houseNumber = row[4]?.toString() ?? '';
+        final cityName = row[8]?.toString() ?? '';
+
+        final address = 'ул. $streetName, д. $houseNumber, $cityName';
+
+        return {
+          'debug_source': 'ONLY_USER_PICKUP_POINTS',
+          'debug_auth_user_id': auth.userId,
+          'user_pickup_id': row[0],
+          'id': row[0],
+          'user_id': row[1],
+          'pickup_point_id': row[2],
+          'house_id': row[3],
+          'house_number': row[4],
+          'street_id': row[5],
+          'street_name': row[6],
+          'city_id': row[7],
+          'city_name': row[8],
+          'address': address,
+          'display_name': address,
+        };
+      }).toList();
 
       return Response.json(
         body: {
-          'items': rows
-              .map(
-                (row) => {
-                  'user_pickup_id': row[0],
-                  'pickup_point_id': row[1],
-                  'city_id': row[2],
-                  'city_name': row[3],
-                },
-              )
-              .toList(),
+          'debug_source': 'ONLY_USER_PICKUP_POINTS',
+          'debug_auth_user_id': auth.userId,
+          'count': items.length,
+          'items': items,
         },
       );
 
     case HttpMethod.post:
-      final raw = await context.request.body();
-      final data = jsonDecode(raw) as Map<String, dynamic>;
+      final rawBody = await context.request.body();
 
-      final pickupPointIdRaw = data['pickup_point_id'];
-      final pickupPointId = pickupPointIdRaw is int
-          ? pickupPointIdRaw
-          : int.tryParse(pickupPointIdRaw.toString());
+      if (rawBody.trim().isEmpty) {
+        return Response.json(
+          statusCode: 400,
+          body: {'error': 'Request body is empty'},
+        );
+      }
 
-      if (pickupPointId == null) {
+      final data = jsonDecode(rawBody) as Map<String, dynamic>;
+      final pickupPointId = _toInt(data['pickup_point_id']);
+
+      if (pickupPointId <= 0) {
         return Response.json(
           statusCode: 400,
           body: {'error': 'pickup_point_id is required'},
         );
       }
 
-      final pickupExists = await conn.execute(
+      final inserted = await conn.execute(
         '''
-        SELECT pickup_point_id, city_id
-        FROM pickup_points
-        WHERE pickup_point_id = \$1
+        INSERT INTO user_pickup_points (user_id, pickup_point_id)
+        SELECT \$1, \$2
+        WHERE EXISTS (
+          SELECT 1
+          FROM pickup_points
+          WHERE pickup_point_id = \$2
+        )
+        RETURNING user_pickup_id, user_id, pickup_point_id
         ''',
-        parameters: [pickupPointId],
+        parameters: [auth.userId, pickupPointId],
       );
 
-      if (pickupExists.isEmpty) {
+      if (inserted.isEmpty) {
         return Response.json(
           statusCode: 404,
           body: {'error': 'Pickup point not found'},
         );
       }
-
-      final duplicate = await conn.execute(
-        '''
-        SELECT user_pickup_id
-        FROM user_pickup_points
-        WHERE user_id = \$1 AND pickup_point_id = \$2
-        LIMIT 1
-        ''',
-        parameters: [user.userId, pickupPointId],
-      );
-
-      if (duplicate.isNotEmpty) {
-        return Response.json(
-          statusCode: 409,
-          body: {'error': 'Pickup point already saved'},
-        );
-      }
-
-      final inserted = await conn.execute(
-        '''
-        INSERT INTO user_pickup_points (user_id, pickup_point_id)
-        VALUES (\$1, \$2)
-        RETURNING user_pickup_id, pickup_point_id
-        ''',
-        parameters: [user.userId, pickupPointId],
-      );
 
       final row = inserted.first;
 
@@ -106,7 +120,9 @@ Future<Response> onRequest(RequestContext context) async {
         statusCode: 201,
         body: {
           'user_pickup_id': row[0],
-          'pickup_point_id': row[1],
+          'id': row[0],
+          'user_id': row[1],
+          'pickup_point_id': row[2],
         },
       );
 

@@ -1,5 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-
+import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:diplomeprojectmobile/features/seller/data/datasources/seller_api.dart';
 import 'package:diplomeprojectmobile/features/seller/presentation/controllers/seller_state.dart';
 
@@ -261,6 +262,51 @@ class SellerController extends Cubit<SellerState> {
         sortOrder: sortOrder,
       );
       return true;
+    } catch (e) {
+      emit(state.copyWith(errorMessage: e.toString()));
+      return false;
+    }
+  }
+
+  Future<bool> uploadProductImageFile({
+    required int productId,
+    required File file,
+  }) async {
+    try {
+      await _sellerApi.uploadProductImageFile(productId: productId, file: file);
+      return true;
+    } on DioException catch (e) {
+      emit(
+        state.copyWith(
+          errorMessage:
+              e.response?.data?.toString() ?? e.message ?? e.toString(),
+        ),
+      );
+      return false;
+    } catch (e) {
+      emit(state.copyWith(errorMessage: e.toString()));
+      return false;
+    }
+  }
+
+  Future<bool> setMainProductImage({
+    required int productId,
+    required int imageId,
+  }) async {
+    try {
+      await _sellerApi.setMainProductImage(
+        productId: productId,
+        imageId: imageId,
+      );
+      return true;
+    } on DioException catch (e) {
+      emit(
+        state.copyWith(
+          errorMessage:
+              e.response?.data?.toString() ?? e.message ?? e.toString(),
+        ),
+      );
+      return false;
     } catch (e) {
       emit(state.copyWith(errorMessage: e.toString()));
       return false;

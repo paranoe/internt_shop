@@ -128,6 +128,7 @@ class AdminApi {
         if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
       },
     );
+
     return _extractItems(response.data);
   }
 
@@ -154,23 +155,24 @@ class AdminApi {
       '/admin/pickup-points',
       queryParameters: {if (cityId != null && cityId > 0) 'city_id': cityId},
     );
+
     return _extractItems(response.data);
   }
 
-  Future<void> createPickupPoint({required int cityId}) async {
+  Future<void> createPickupPoint({required int houseId}) async {
     await _dioClient.dio.post(
       '/admin/pickup-points',
-      data: {'city_id': cityId},
+      data: {'house_id': houseId},
     );
   }
 
   Future<void> updatePickupPoint({
     required int pickupPointId,
-    required int cityId,
+    required int houseId,
   }) async {
     await _dioClient.dio.patch(
       '/admin/pickup-points/$pickupPointId',
-      data: {'city_id': cityId},
+      data: {'house_id': houseId},
     );
   }
 
@@ -194,6 +196,7 @@ class AdminApi {
         if (sellerId != null && sellerId > 0) 'seller_id': sellerId,
       },
     );
+
     return _extractItems(response.data);
   }
 
@@ -269,6 +272,7 @@ class AdminApi {
         if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
       },
     );
+
     return _extractItems(response.data);
   }
 
@@ -314,7 +318,6 @@ class AdminApi {
       },
     );
 
-    print('ADMIN USERS RAW: ${response.data}');
     return _extractItems(response.data);
   }
 
@@ -427,6 +430,7 @@ class AdminApi {
         if (categoryId != null && categoryId > 0) 'category_id': categoryId,
       },
     );
+
     return _extractItems(response.data);
   }
 
@@ -446,6 +450,7 @@ class AdminApi {
     int? categoryId,
   }) async {
     final body = <String, dynamic>{};
+
     if (name != null) body['name'] = name;
     if (categoryId != null) body['category_id'] = categoryId;
 
@@ -467,6 +472,44 @@ class AdminApi {
   Future<List<Map<String, dynamic>>> getMeasurementUnits() async {
     final response = await _dioClient.dio.get('/admin/measurement-units');
     return _extractItems(response.data);
+  }
+
+  Future<List<Map<String, dynamic>>> getStreets({required int cityId}) async {
+    final response = await _dioClient.dio.get(
+      '/admin/streets',
+      queryParameters: {'city_id': cityId},
+    );
+
+    return _extractItems(response.data);
+  }
+
+  Future<void> createStreet({
+    required int cityId,
+    required String streetName,
+  }) async {
+    await _dioClient.dio.post(
+      '/admin/streets',
+      data: {'city_id': cityId, 'street_name': streetName},
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getHouses({required int streetId}) async {
+    final response = await _dioClient.dio.get(
+      '/admin/houses',
+      queryParameters: {'street_id': streetId},
+    );
+
+    return _extractItems(response.data);
+  }
+
+  Future<void> createHouse({
+    required int streetId,
+    required String houseNumber,
+  }) async {
+    await _dioClient.dio.post(
+      '/admin/houses',
+      data: {'street_id': streetId, 'house_number': houseNumber},
+    );
   }
 
   Future<void> createMeasurementUnit({

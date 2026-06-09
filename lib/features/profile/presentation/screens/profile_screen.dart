@@ -87,6 +87,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         false;
 
     if (!mounted || !confirmed) return;
+
     await context.read<ProfileController>().deleteCard(cardId);
   }
 
@@ -115,7 +116,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
         false;
 
     if (!mounted || !confirmed) return;
-    await context.read<ProfileController>().deletePickupPoint(userPickupId);
+
+    final ok = await context.read<ProfileController>().deletePickupPoint(
+      userPickupId,
+    );
+
+    if (!mounted) return;
+
+    if (ok) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('ПВЗ удалён')));
+    } else {
+      final error = context.read<ProfileController>().state.errorMessage;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error?.isNotEmpty == true ? error! : 'Не удалось удалить ПВЗ',
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _showAddCardDialog() async {
@@ -237,6 +258,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ) ??
         false;
 
+    cardController.dispose();
+
     if (!mounted) return;
 
     if (saved) {
@@ -267,9 +290,83 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     int? selectedCityId;
+    int? selectedStreetId;
+    int? selectedHouseId;
     int? selectedPickupPointId;
+
+    List<Map<String, dynamic>> allCityPickupPoints = [];
+    List<Map<String, dynamic>> streets = [];
+    List<Map<String, dynamic>> houses = [];
     List<Map<String, dynamic>> pickupPoints = [];
-    bool isLoadingPickupPoints = false;
+
+    bool isLoading = false;
+
+    String addressFromPoint(Map<String, dynamic> point) {
+      final address =
+          point['address']?.toString().trim() ??
+          point['display_name']?.toString().trim() ??
+          '';
+
+      if (address.isNotEmpty) {
+        return address;
+      }
+
+      final streetName = point['street_name']?.toString().trim() ?? '';
+      final houseNumber = point['house_number']?.toString().trim() ?? '';
+      final cityName = point['city_name']?.toString().trim() ?? '';
+
+      final parts = <String>[];
+
+      if (streetName.isNotEmpty) {
+        parts.add('ул. $streetName');
+      }
+
+      if (houseNumber.isNotEmpty) {
+        parts.add('д. $houseNumber');
+      }
+
+      if (cityName.isNotEmpty) {
+        parts.add(cityName);
+      }
+
+      return parts.isEmpty ? 'ПВЗ' : parts.join(', ');
+    }
+
+    List<Map<String, dynamic>> uniqueById({
+      required List<Map<String, dynamic>> items,
+      required String idKey,
+    }) {
+      final ids = <int>{};
+      final result = <Map<String, dynamic>>[];
+
+      for (final item in items) {
+        final id = int.tryParse(item[idKey]?.toString() ?? '') ?? 0;
+
+        if (id <= 0 || ids.contains(id)) {
+          continue;
+        }
+
+        ids.add(id);
+        result.add(item);
+      }
+
+      return result;
+    }
+
+    int? safeDropdownValue({
+      required int? value,
+      required List<Map<String, dynamic>> items,
+      required String idKey,
+    }) {
+      if (value == null) return null;
+
+      final exists = items.any((item) {
+        final id = int.tryParse(item[idKey]?.toString() ?? '') ?? 0;
+        return id == value;
+      });
+
+      return exists ? value : null;
+    }
 
     final saved =
         await showModalBottomSheet<bool>(
@@ -279,10 +376,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
           builder: (sheetContext) {
             return StatefulBuilder(
               builder: (context, setModalState) {
-                Future<void> loadPickupPoints(int cityId) async {
+                Future<void> loadCityData(int cityId) async {
                   setModalState(() {
-                    isLoadingPickupPoints = true;
+                    isLoading = true;
+                    selectedStreetId = null;
+                    selectedHouseId = null;
                     selectedPickupPointId = null;
+                    allCityPickupPoints = [];
+                    streets = [];
+                    houses = [];
                     pickupPoints = [];
                   });
 
@@ -292,11 +394,69 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                   if (!mounted) return;
 
+                  final loadedStreets = uniqueById(
+                    items: loaded,
+                    idKey: 'street_id',
+                  );
+
                   setModalState(() {
-                    pickupPoints = loaded;
-                    isLoadingPickupPoints = false;
+                    allCityPickupPoints = loaded;
+                    streets = loadedStreets;
+                    isLoading = false;
                   });
                 }
+
+                void loadHousesByStreet(int streetId) {
+                  final loadedHouses = allCityPickupPoints.where((point) {
+                    final id =
+                        int.tryParse(point['street_id']?.toString() ?? '') ?? 0;
+                    return id == streetId;
+                  }).toList();
+
+                  setModalState(() {
+                    selectedHouseId = null;
+                    selectedPickupPointId = null;
+                    houses = uniqueById(items: loadedHouses, idKey: 'house_id');
+                    pickupPoints = [];
+                  });
+                }
+
+                void loadPickupPointsByHouse(int houseId) {
+                  final loadedPickupPoints = allCityPickupPoints.where((point) {
+                    final id =
+                        int.tryParse(point['house_id']?.toString() ?? '') ?? 0;
+                    return id == houseId;
+                  }).toList();
+
+                  setModalState(() {
+                    selectedPickupPointId = null;
+                    pickupPoints = loadedPickupPoints;
+                  });
+                }
+
+                final safeCityId = safeDropdownValue(
+                  value: selectedCityId,
+                  items: cities,
+                  idKey: 'city_id',
+                );
+
+                final safeStreetId = safeDropdownValue(
+                  value: selectedStreetId,
+                  items: streets,
+                  idKey: 'street_id',
+                );
+
+                final safeHouseId = safeDropdownValue(
+                  value: selectedHouseId,
+                  items: houses,
+                  idKey: 'house_id',
+                );
+
+                final safePickupPointId = safeDropdownValue(
+                  value: selectedPickupPointId,
+                  items: pickupPoints,
+                  idKey: 'pickup_point_id',
+                );
 
                 return Container(
                   decoration: BoxDecoration(
@@ -311,127 +471,206 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     20,
                     24 + MediaQuery.of(sheetContext).viewInsets.bottom,
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 42,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.black26,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      const Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          'Выбрать ПВЗ',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      DropdownButtonFormField<int>(
-                        value: selectedCityId,
-                        decoration: InputDecoration(
-                          labelText: 'Город',
-                          prefixIcon: const Icon(Icons.location_city),
-                          filled: true,
-                          fillColor: Colors.grey.shade100,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(18),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                        items: cities.map((city) {
-                          final cityId =
-                              int.tryParse(city['city_id'].toString()) ?? 0;
-                          final cityName = city['city_name']?.toString() ?? '—';
-
-                          return DropdownMenuItem<int>(
-                            value: cityId,
-                            child: Text(cityName),
-                          );
-                        }).toList(),
-                        onChanged: (value) async {
-                          if (value == null) return;
-                          selectedCityId = value;
-                          await loadPickupPoints(value);
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      if (isLoadingPickupPoints)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 12),
-                          child: CircularProgressIndicator(),
-                        )
-                      else
-                        DropdownButtonFormField<int>(
-                          value: selectedPickupPointId,
-                          decoration: InputDecoration(
-                            labelText: 'ПВЗ',
-                            prefixIcon: const Icon(Icons.location_on_outlined),
-                            filled: true,
-                            fillColor: Colors.grey.shade100,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(18),
-                              borderSide: BorderSide.none,
+                  child: SafeArea(
+                    top: false,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 42,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: Colors.black26,
+                              borderRadius: BorderRadius.circular(999),
                             ),
                           ),
-                          items: pickupPoints.map((point) {
-                            final pickupPointId =
-                                int.tryParse(
-                                  point['pickup_point_id'].toString(),
-                                ) ??
-                                0;
-
-                            final cityName =
-                                point['city_name']?.toString() ?? '';
-
-                            return DropdownMenuItem<int>(
-                              value: pickupPointId,
-                              child: Text(
-                                cityName.isEmpty
-                                    ? 'ПВЗ #$pickupPointId'
-                                    : 'ПВЗ #$pickupPointId — $cityName',
+                          const SizedBox(height: 20),
+                          const Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Выбрать ПВЗ',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w700,
                               ),
-                            );
-                          }).toList(),
-                          onChanged: pickupPoints.isEmpty
-                              ? null
-                              : (value) {
-                                  setModalState(() {
-                                    selectedPickupPointId = value;
-                                  });
-                                },
-                        ),
-                      const SizedBox(height: 18),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: () async {
-                            if (selectedPickupPointId == null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Выберите ПВЗ')),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          DropdownButtonFormField<int>(
+                            value: safeCityId,
+                            decoration: InputDecoration(
+                              labelText: 'Город',
+                              prefixIcon: const Icon(Icons.location_city),
+                              filled: true,
+                              fillColor: Colors.grey.shade100,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(18),
+                                borderSide: BorderSide.none,
+                              ),
+                            ),
+                            items: cities.map((city) {
+                              final cityId =
+                                  int.tryParse(city['city_id'].toString()) ?? 0;
+                              final cityName =
+                                  city['city_name']?.toString() ?? '—';
+
+                              return DropdownMenuItem<int>(
+                                value: cityId,
+                                child: Text(cityName),
                               );
-                              return;
-                            }
+                            }).toList(),
+                            onChanged: (value) async {
+                              if (value == null || value <= 0) return;
 
-                            final ok = await profileController.addPickupPoint(
-                              selectedPickupPointId!,
-                            );
+                              selectedCityId = value;
+                              await loadCityData(value);
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          if (isLoading)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: CircularProgressIndicator(),
+                            )
+                          else ...[
+                            DropdownButtonFormField<int>(
+                              value: safeStreetId,
+                              decoration: InputDecoration(
+                                labelText: 'Улица',
+                                prefixIcon: const Icon(Icons.signpost_outlined),
+                                filled: true,
+                                fillColor: Colors.grey.shade100,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                  borderSide: BorderSide.none,
+                                ),
+                              ),
+                              items: streets.map((point) {
+                                final streetId =
+                                    int.tryParse(
+                                      point['street_id']?.toString() ?? '',
+                                    ) ??
+                                    0;
 
-                            if (!mounted) return;
-                            Navigator.of(sheetContext).pop(ok);
-                          },
-                          icon: const Icon(Icons.save_outlined),
-                          label: const Text('Сохранить ПВЗ'),
-                        ),
+                                final streetName =
+                                    point['street_name']?.toString() ?? '—';
+
+                                return DropdownMenuItem<int>(
+                                  value: streetId,
+                                  child: Text(streetName),
+                                );
+                              }).toList(),
+                              onChanged: streets.isEmpty
+                                  ? null
+                                  : (value) {
+                                      if (value == null || value <= 0) return;
+
+                                      selectedStreetId = value;
+                                      loadHousesByStreet(value);
+                                    },
+                            ),
+                            const SizedBox(height: 16),
+                            DropdownButtonFormField<int>(
+                              value: safeHouseId,
+                              decoration: InputDecoration(
+                                labelText: 'Дом',
+                                prefixIcon: const Icon(Icons.home_outlined),
+                                filled: true,
+                                fillColor: Colors.grey.shade100,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                  borderSide: BorderSide.none,
+                                ),
+                              ),
+                              items: houses.map((point) {
+                                final houseId =
+                                    int.tryParse(
+                                      point['house_id']?.toString() ?? '',
+                                    ) ??
+                                    0;
+
+                                final houseNumber =
+                                    point['house_number']?.toString() ?? '—';
+
+                                return DropdownMenuItem<int>(
+                                  value: houseId,
+                                  child: Text(houseNumber),
+                                );
+                              }).toList(),
+                              onChanged: houses.isEmpty
+                                  ? null
+                                  : (value) {
+                                      if (value == null || value <= 0) return;
+
+                                      selectedHouseId = value;
+                                      loadPickupPointsByHouse(value);
+                                    },
+                            ),
+                            const SizedBox(height: 16),
+                            DropdownButtonFormField<int>(
+                              value: safePickupPointId,
+                              decoration: InputDecoration(
+                                labelText: 'ПВЗ',
+                                prefixIcon: const Icon(
+                                  Icons.location_on_outlined,
+                                ),
+                                filled: true,
+                                fillColor: Colors.grey.shade100,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                  borderSide: BorderSide.none,
+                                ),
+                              ),
+                              items: pickupPoints.map((point) {
+                                final pickupPointId =
+                                    int.tryParse(
+                                      point['pickup_point_id']?.toString() ??
+                                          '',
+                                    ) ??
+                                    0;
+
+                                return DropdownMenuItem<int>(
+                                  value: pickupPointId,
+                                  child: Text(addressFromPoint(point)),
+                                );
+                              }).toList(),
+                              onChanged: pickupPoints.isEmpty
+                                  ? null
+                                  : (value) {
+                                      setModalState(() {
+                                        selectedPickupPointId = value;
+                                      });
+                                    },
+                            ),
+                          ],
+                          const SizedBox(height: 18),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              onPressed: () async {
+                                if (selectedPickupPointId == null) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Выберите ПВЗ'),
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                final ok = await profileController
+                                    .addPickupPoint(selectedPickupPointId!);
+
+                                if (!mounted) return;
+                                Navigator.of(sheetContext).pop(ok);
+                              },
+                              icon: const Icon(Icons.save_outlined),
+                              label: const Text('Сохранить ПВЗ'),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 );
               },
@@ -511,10 +750,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildPickupPointItem(Map<String, dynamic> point) {
-    final userPickupId = int.tryParse(point['user_pickup_id'].toString()) ?? 0;
+    print('PROFILE PICKUP ITEM: $point');
+    final userPickupId =
+        int.tryParse(
+          point['user_pickup_id']?.toString() ?? point['id']?.toString() ?? '',
+        ) ??
+        0;
+
     final pickupPointId =
-        int.tryParse(point['pickup_point_id'].toString()) ?? 0;
-    final cityName = point['city_name']?.toString() ?? '—';
+        int.tryParse(point['pickup_point_id']?.toString() ?? '') ?? 0;
+
+    final address =
+        point['address']?.toString().trim() ??
+        point['display_name']?.toString().trim() ??
+        '';
+
+    final streetName = point['street_name']?.toString().trim() ?? '';
+    final houseNumber = point['house_number']?.toString().trim() ?? '';
+    final cityName = point['city_name']?.toString().trim() ?? '';
+
+    final fallbackAddress = [
+      if (streetName.isNotEmpty) 'ул. $streetName',
+      if (houseNumber.isNotEmpty) 'д. $houseNumber',
+      if (cityName.isNotEmpty) cityName,
+    ].join(', ');
+
+    final displayAddress = address.isNotEmpty
+        ? address
+        : fallbackAddress.isNotEmpty
+        ? fallbackAddress
+        : 'ПВЗ #$pickupPointId';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -547,19 +812,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'ПВЗ #$pickupPointId',
+                  displayAddress,
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(cityName, style: TextStyle(color: Colors.grey.shade700)),
+                Text(
+                  'Сохранённый пункт выдачи',
+                  style: TextStyle(color: Colors.grey.shade700),
+                ),
               ],
             ),
           ),
           IconButton(
-            onPressed: userPickupId == 0
+            onPressed: userPickupId <= 0
                 ? null
                 : () => _confirmDeletePickupPoint(userPickupId),
             icon: const Icon(Icons.delete_outline),

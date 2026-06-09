@@ -21,9 +21,11 @@ class ProfileController extends Cubit<ProfileState> {
     emit(state.copyWith(status: ProfileStatus.loading, clearError: true));
 
     try {
-      final profile = await _getProfileUseCase();
+      final profile = await _profileApi.getProfile();
       final cards = await _profileApi.getCards();
       final pickupPoints = await _profileApi.getPickupPoints();
+
+      print('PROFILE CONTROLLER PICKUP POINTS: $pickupPoints');
 
       emit(
         state.copyWith(
@@ -113,14 +115,18 @@ class ProfileController extends Cubit<ProfileState> {
     }
   }
 
-  Future<void> deletePickupPoint(int userPickupId) async {
+  Future<bool> deletePickupPoint(int userPickupId) async {
+    emit(state.copyWith(status: ProfileStatus.loading, clearError: true));
+
     try {
       await _profileApi.deletePickupPoint(userPickupId);
       await loadProfile();
+      return true;
     } catch (e) {
       emit(
         state.copyWith(status: ProfileStatus.error, errorMessage: e.toString()),
       );
+      return false;
     }
   }
 

@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'package:diplomeprojectmobile/features/seller/presentation/controllers/seller_controller.dart';
 
@@ -22,8 +25,7 @@ class _SellerProductEditScreenState extends State<SellerProductEditScreen> {
   final _quantityController = TextEditingController();
   final _currencyController = TextEditingController(text: 'BYN');
 
-  final _imageUrlController = TextEditingController();
-  final _sortOrderController = TextEditingController(text: '1');
+  final _imagePicker = ImagePicker();
 
   final Map<int, TextEditingController> _parameterControllers = {};
   final Map<int, int?> _selectedUnitIds = {};
@@ -343,7 +345,7 @@ class _SellerProductEditScreenState extends State<SellerProductEditScreen> {
     }
   }
 
-  Future<void> _addImage() async {
+  Future<void> _pickAndUploadImage(ImageSource source) async {
     if (_productId == null) {
       ScaffoldMessenger.of(
         context,
@@ -351,24 +353,20 @@ class _SellerProductEditScreenState extends State<SellerProductEditScreen> {
       return;
     }
 
-    final imageUrl = _imageUrlController.text.trim();
-    final sortOrder = int.tryParse(_sortOrderController.text.trim()) ?? 1;
+    final picked = await _imagePicker.pickImage(
+      source: source,
+      imageQuality: 85,
+    );
 
-    if (imageUrl.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Введите ссылку на изображение')),
-      );
-      return;
-    }
+    if (picked == null) return;
 
     setState(() {
       _isSavingImage = true;
     });
 
-    final ok = await context.read<SellerController>().uploadProductImage(
+    final ok = await context.read<SellerController>().uploadProductImageFile(
       productId: _productId!,
-      imageUrl: imageUrl,
-      sortOrder: sortOrder,
+      file: File(picked.path),
     );
 
     if (!mounted) return;
@@ -378,15 +376,13 @@ class _SellerProductEditScreenState extends State<SellerProductEditScreen> {
     });
 
     if (ok) {
-      _imageUrlController.clear();
-      _sortOrderController.text = '1';
       await _load();
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Изображение добавлено')));
+      ).showSnackBar(const SnackBar(content: Text('Изображение загружено')));
     } else {
       final error = context.read<SellerController>().state.errorMessage;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -394,7 +390,39 @@ class _SellerProductEditScreenState extends State<SellerProductEditScreen> {
           content: Text(
             error?.isNotEmpty == true
                 ? error!
-                : 'Не удалось добавить изображение',
+                : 'Не удалось загрузить изображение',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _setMainImage(int imageId) async {
+    if (_productId == null) return;
+
+    final ok = await context.read<SellerController>().setMainProductImage(
+      productId: _productId!,
+      imageId: imageId,
+    );
+
+    if (!mounted) return;
+
+    if (ok) {
+      await _load();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Главное изображение выбрано')),
+      );
+    } else {
+      final error = context.read<SellerController>().state.errorMessage;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error?.isNotEmpty == true
+                ? error!
+                : 'Не удалось выбрать главное изображение',
           ),
         ),
       );
@@ -474,8 +502,6 @@ class _SellerProductEditScreenState extends State<SellerProductEditScreen> {
     _priceController.dispose();
     _quantityController.dispose();
     _currencyController.dispose();
-    _imageUrlController.dispose();
-    _sortOrderController.dispose();
     super.dispose();
   }
 
@@ -778,38 +804,39 @@ class _SellerProductEditScreenState extends State<SellerProductEditScreen> {
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: _imageUrlController,
-                    decoration: _decoration(
-                      label: 'URL изображения',
-                      icon: Icons.image_outlined,
+                  if (_isSavingImage)
+                    const Center(child: CircularProgressIndicator())
+                  else
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () =>
+                                _pickAndUploadImage(ImageSource.gallery),
+                            icon: const Icon(Icons.photo_library_outlined),
+                            label: const Text('Из галереи'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () =>
+                                _pickAndUploadImage(ImageSource.camera),
+                            icon: const Icon(Icons.camera_alt_outlined),
+                            label: const Text('Камера'),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _sortOrderController,
-                    keyboardType: TextInputType.number,
-                    decoration: _decoration(
-                      label: 'Порядок сортировки',
-                      icon: Icons.sort_outlined,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: _isSavingImage ? null : _addImage,
-                      icon: const Icon(Icons.add_photo_alternate_outlined),
-                      label: _isSavingImage
-                          ? const Text('Добавление...')
-                          : const Text('Добавить изображение'),
-                    ),
-                  ),
                   const SizedBox(height: 12),
                   ..._images.map((image) {
                     final imageId =
                         int.tryParse(image['image_id']?.toString() ?? '') ?? 0;
                     final imageUrl = (image['image_url'] ?? '').toString();
+                    final sortOrder =
+                        int.tryParse(image['sort_order']?.toString() ?? '') ??
+                        999;
+                    final isMain = sortOrder == 1;
 
                     return Container(
                       margin: const EdgeInsets.only(bottom: 10),
@@ -818,14 +845,51 @@ class _SellerProductEditScreenState extends State<SellerProductEditScreen> {
                         borderRadius: BorderRadius.circular(18),
                       ),
                       child: ListTile(
+                        leading: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: SizedBox(
+                            width: 56,
+                            height: 56,
+                            child: imageUrl.isEmpty
+                                ? const Icon(Icons.image_not_supported)
+                                : Image.network(
+                                    imageUrl,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) {
+                                      return const Icon(
+                                        Icons.broken_image_outlined,
+                                      );
+                                    },
+                                  ),
+                          ),
+                        ),
                         title: Text(
                           imageUrl,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        trailing: IconButton(
-                          onPressed: () => _deleteImage(imageId),
-                          icon: const Icon(Icons.delete_outline),
+                        subtitle: isMain
+                            ? const Text('Главное изображение')
+                            : const Text('Можно сделать главным'),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (isMain)
+                              const Icon(Icons.star, color: Colors.amber)
+                            else
+                              TextButton(
+                                onPressed: imageId <= 0
+                                    ? null
+                                    : () => _setMainImage(imageId),
+                                child: const Text('Главная'),
+                              ),
+                            IconButton(
+                              onPressed: imageId <= 0
+                                  ? null
+                                  : () => _deleteImage(imageId),
+                              icon: const Icon(Icons.delete_outline),
+                            ),
+                          ],
                         ),
                       ),
                     );
