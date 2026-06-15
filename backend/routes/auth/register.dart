@@ -49,45 +49,50 @@ Future<Response> onRequest(RequestContext context) async {
     );
   }
 
-  final existing = await conn.execute(
-    '''
-    SELECT user_id
-    FROM users
-    WHERE email = \$1
-    LIMIT 1
-    ''',
-    parameters: [email],
-  );
-
-  if (existing.isNotEmpty) {
-    return Response.json(
-      statusCode: 409,
-      body: {'error': 'User already exists'},
-    );
-  }
-
-  final roleRows = await conn.execute(
-    '''
-    SELECT role_id
-    FROM roles
-    WHERE name = \$1
-    LIMIT 1
-    ''',
-    parameters: [role],
-  );
-
-  if (roleRows.isEmpty) {
-    return Response.json(
-      statusCode: 500,
-      body: {'error': 'Role not found in database'},
-    );
-  }
-
-  final roleId = (roleRows.first[0] as num).toInt();
-  final passwordHash = PasswordHasher.hash(password);
-
-  await conn.execute('BEGIN');
   try {
+    print('REGISTER START: $email');
+
+    final existing = await conn.execute(
+      '''
+      SELECT user_id
+      FROM users
+      WHERE email = \$1
+      LIMIT 1
+      ''',
+      parameters: [email],
+    );
+
+    if (existing.isNotEmpty) {
+      print('REGISTER ERROR: user already exists');
+      return Response.json(
+        statusCode: 409,
+        body: {'error': 'User already exists'},
+      );
+    }
+
+    final roleRows = await conn.execute(
+      '''
+      SELECT role_id
+      FROM roles
+      WHERE name = \$1
+      LIMIT 1
+      ''',
+      parameters: [role],
+    );
+
+    if (roleRows.isEmpty) {
+      print('REGISTER ERROR: role not found');
+      return Response.json(
+        statusCode: 500,
+        body: {'error': 'Role not found in database'},
+      );
+    }
+
+    final roleId = (roleRows.first[0] as num).toInt();
+    final passwordHash = PasswordHasher.hash(password);
+
+    await conn.execute('BEGIN');
+
     final inserted = await conn.execute(
       '''
       INSERT INTO users (email, password_hash, role_id, email_verified, created_at)
@@ -98,6 +103,7 @@ Future<Response> onRequest(RequestContext context) async {
     );
 
     final userId = (inserted.first[0] as num).toInt();
+    print('USER CREATED: $userId');
 
     if (role == 'seller') {
       final shopNameRaw = data['shop_name']?.toString().trim();
@@ -111,16 +117,23 @@ Future<Response> onRequest(RequestContext context) async {
         ''',
         parameters: [shopName, userId],
       );
+
+      print('SELLER CREATED: $userId');
     }
 
     await conn.execute('COMMIT');
+    print('DB COMMIT OK');
 
     final code = EmailCodeGenerator.generate();
+    print('CODE GENERATED: $code');
+
     final codeStore = EmailCodeStore();
     await codeStore.saveVerifyCode(email: email, code: code);
+    print('CODE SAVED TO REDIS');
 
     final emailService = EmailService();
     await emailService.sendVerificationCode(email: email, code: code);
+    print('EMAIL SENT');
 
     return Response.json(
       statusCode: 201,
@@ -131,8 +144,17 @@ Future<Response> onRequest(RequestContext context) async {
         'role': role,
       },
     );
-  } catch (e) {
-    await conn.execute('ROLLBACK');
-    rethrow;
+  } catch (e, st) {
+    print('REGISTER FATAL ERROR: $e');
+    print(st);
+
+    try {
+      await conn.execute('ROLLBACK');
+    } catch (_) {}
+
+    return Response.json(
+      statusCode: 500,
+      body: {'error': 'Registration failed', 'details': e.toString()},
+    );
   }
 }

@@ -45,6 +45,7 @@ class OrdersApi {
       createdAt: orderJson['created_at']?.toString() ?? '',
       status: orderJson['status']?.toString() ?? '',
       itemsCount: itemsJson.length,
+      previewItems: const [],
     );
 
     final items = itemsJson

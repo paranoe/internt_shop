@@ -9,6 +9,9 @@ import 'package:diplomeprojectmobile/core/widgets/empty_state_view.dart';
 import 'package:diplomeprojectmobile/features/cart/domain/entities/cart_item.dart';
 import 'package:diplomeprojectmobile/features/favorites/presentation/controllers/favorites_controller.dart';
 import 'package:diplomeprojectmobile/features/favorites/presentation/controllers/favorites_state.dart';
+import 'package:diplomeprojectmobile/features/auth/presentation/controllers/auth_controller.dart';
+import 'package:diplomeprojectmobile/features/auth/presentation/controllers/auth_state.dart';
+import 'package:diplomeprojectmobile/shared/widgets/auth_required.dart';
 
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
@@ -51,6 +54,14 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         ) ??
         false;
 
+    final isAuth =
+        context.read<AuthController>().state.status == AuthStatus.authenticated;
+
+    if (!isAuth) {
+      context.push('/login');
+      return;
+    }
+
     if (!mounted || !confirmed) return;
     await context.read<FavoritesController>().removeFavorite(item.productId);
   }
@@ -58,6 +69,16 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isAuth =
+        context.watch<AuthController>().state.status ==
+        AuthStatus.authenticated;
+
+    if (!isAuth) {
+      return const AuthRequired(
+        title: 'Избранное недоступно',
+        subtitle: 'Войдите, чтобы сохранять товары',
+      );
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),

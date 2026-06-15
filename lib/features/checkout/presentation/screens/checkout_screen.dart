@@ -4,12 +4,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:diplomeprojectmobile/app/router/routes.dart';
+import 'package:diplomeprojectmobile/core/utils/price_formatter.dart';
 import 'package:diplomeprojectmobile/features/checkout/domain/entities/payment_method.dart';
 import 'package:diplomeprojectmobile/features/checkout/domain/entities/user_card.dart';
 import 'package:diplomeprojectmobile/features/checkout/presentation/controllers/checkout_controller.dart';
 import 'package:diplomeprojectmobile/features/checkout/presentation/controllers/checkout_state.dart';
-import 'package:diplomeprojectmobile/core/utils/price_formatter.dart';
-import 'package:diplomeprojectmobile/core/widgets/empty_state_view.dart';
+import 'package:diplomeprojectmobile/features/auth/presentation/controllers/auth_controller.dart';
+import 'package:diplomeprojectmobile/features/auth/presentation/controllers/auth_state.dart';
+import 'package:diplomeprojectmobile/shared/widgets/auth_required.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -29,12 +31,12 @@ String _paymentMethodText(String name) {
 }
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
-  static const int _minCardDigits = 16;
   static const int _maxCardDigits = 16;
 
   @override
   void initState() {
     super.initState();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<CheckoutController>().load();
     });
@@ -153,6 +155,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         ) ??
         false;
 
+    controller.dispose();
+
     if (!mounted) return;
 
     if (saved) {
@@ -241,6 +245,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isAuth =
+        context.watch<AuthController>().state.status ==
+        AuthStatus.authenticated;
+
+    if (!isAuth) {
+      return const AuthRequired(
+        title: 'Оформление недоступно',
+        subtitle: 'Войдите или зарегистрируйтесь',
+      );
+    }
     return BlocListener<CheckoutController, CheckoutState>(
       listener: (context, state) {
         if (state.createdOrderId != null && state.createdOrderId! > 0) {
@@ -287,6 +301,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             }
 
             final preview = state.preview;
+
             if (preview == null) {
               return const Center(child: Text('Нет данных для оформления'));
             }
@@ -367,7 +382,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   ),
                   items: state.cities
                       .map(
-                        (city) => DropdownMenuItem(
+                        (city) => DropdownMenuItem<int>(
                           value: city.cityId,
                           child: Text(city.cityName),
                         ),
@@ -395,7 +410,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   ),
                   items: state.pickupPoints
                       .map(
-                        (point) => DropdownMenuItem(
+                        (point) => DropdownMenuItem<int>(
                           value: point.pickupPointId,
                           child: Text('ПВЗ #${point.pickupPointId}'),
                         ),
@@ -493,6 +508,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           preview.totalAmount,
                           currency: preview.currency,
                         ),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ],
                   ),
@@ -542,6 +561,7 @@ class _CardNumberInputFormatter extends TextInputFormatter {
     }
 
     final buffer = StringBuffer();
+
     for (var i = 0; i < digits.length; i++) {
       buffer.write(digits[i]);
 

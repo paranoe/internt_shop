@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:diplomeprojectmobile/core/network/dio_client.dart';
 
 import 'package:diplomeprojectmobile/app/theme/colors.dart';
-import 'package:diplomeprojectmobile/core/network/dio_client.dart';
 import 'package:diplomeprojectmobile/core/widgets/error_view.dart';
 import 'package:diplomeprojectmobile/features/cart/domain/entities/cart_item.dart';
 import 'package:diplomeprojectmobile/features/cart/presentation/controllers/cart_controller.dart';
@@ -12,6 +12,9 @@ import 'package:diplomeprojectmobile/features/favorites/presentation/controllers
 import 'package:diplomeprojectmobile/features/product/presentation/controllers/product_controller.dart';
 import 'package:diplomeprojectmobile/features/product/presentation/controllers/product_state.dart';
 import 'package:diplomeprojectmobile/features/product/presentation/screens/add_review_screen.dart';
+import 'package:diplomeprojectmobile/features/auth/presentation/controllers/auth_controller.dart';
+import 'package:diplomeprojectmobile/features/auth/presentation/controllers/auth_state.dart';
+import 'package:diplomeprojectmobile/shared/widgets/auth_required.dart';
 
 class ProductDetailsScreen extends StatefulWidget {
   const ProductDetailsScreen({super.key, required this.productId});
@@ -27,14 +30,13 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   bool _isFavoriteBusy = false;
   bool _canReview = false;
   bool _isCheckingCanReview = false;
-
   int _currentImage = 0;
+
   final PageController _pageController = PageController();
 
   @override
   void initState() {
     super.initState();
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ProductController>().load(widget.productId);
       context.read<CartController>().loadCart();
@@ -51,7 +53,6 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
   CartItem? _findCartItem(CartState state) {
     final items = state.cart?.items ?? [];
-
     try {
       return items.firstWhere((e) => e.productId == widget.productId);
     } catch (_) {
@@ -76,28 +77,20 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     }
 
     try {
-      print('CHECK CAN REVIEW URL: /reviews product_id=${widget.productId}');
-
       final response = await context.read<DioClient>().dio.get(
         '/reviews',
         queryParameters: {'product_id': widget.productId},
       );
 
-      print('CAN REVIEW RESPONSE: ${response.data}');
-
       final data = Map<String, dynamic>.from(response.data as Map);
       final canReview = data['can_review'] == true;
 
       if (!mounted) return;
-
       setState(() {
         _canReview = canReview;
       });
-    } catch (e) {
-      print('CAN REVIEW ERROR: $e');
-
+    } catch (_) {
       if (!mounted) return;
-
       setState(() {
         _canReview = false;
       });
@@ -118,7 +111,6 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     );
 
     if (!mounted) return;
-
     if (saved == true) {
       await context.read<ProductController>().load(widget.productId);
       await _loadCanReview();
@@ -127,7 +119,6 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
   Future<void> _addToCart() async {
     setState(() => _isBusy = true);
-
     try {
       await context.read<CartController>().addItem(
         productId: widget.productId,
@@ -135,7 +126,6 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       );
     } catch (_) {
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Не удалось добавить товар в корзину')),
       );
@@ -150,7 +140,6 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     if (_isFavoriteBusy) return;
 
     setState(() => _isFavoriteBusy = true);
-
     try {
       await context.read<FavoritesController>().toggleFavorite(
         widget.productId,
@@ -164,7 +153,6 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
   Future<void> _increase(CartItem item) async {
     setState(() => _isBusy = true);
-
     try {
       await context.read<CartController>().increaseQty(
         item.cartItemId,
@@ -179,7 +167,6 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
   Future<void> _decrease(CartItem item) async {
     setState(() => _isBusy = true);
-
     try {
       await context.read<CartController>().decreaseOrRemoveFromProduct(
         item.cartItemId,
@@ -213,6 +200,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isAuth =
+        context.watch<AuthController>().state.status ==
+        AuthStatus.authenticated;
     return BlocBuilder<ProductController, ProductState>(
       builder: (context, state) {
         final productTitle = state.details?.name ?? 'Товар';
@@ -280,91 +270,18 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                       child: ListView(
                         padding: EdgeInsets.zero,
                         children: [
-                          SizedBox(
-                            width: MediaQuery.of(context).size.width,
-                            height: 360,
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                if (images.isEmpty)
-                                  Container(
-                                    color: AppColors.surfaceSecondary,
-                                    child: const Center(
-                                      child: Icon(
-                                        Icons.image_outlined,
-                                        size: 64,
-                                        color: Colors.black38,
-                                      ),
-                                    ),
-                                  )
-                                else
-                                  PageView.builder(
-                                    controller: _pageController,
-                                    itemCount: images.length,
-                                    onPageChanged: (index) {
-                                      setState(() {
-                                        _currentImage = index;
-                                      });
-                                    },
-                                    itemBuilder: (context, index) {
-                                      return GestureDetector(
-                                        onTap: () {
-                                          _openImageViewer(imageUrls, index);
-                                        },
-                                        child: Image.network(
-                                          images[index].imageUrl,
-                                          fit: BoxFit.cover,
-                                          width: double.infinity,
-                                          errorBuilder: (_, __, ___) =>
-                                              Container(
-                                                color:
-                                                    AppColors.surfaceSecondary,
-                                                child: const Center(
-                                                  child: Icon(
-                                                    Icons.broken_image_outlined,
-                                                    size: 56,
-                                                  ),
-                                                ),
-                                              ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                if (images.length > 1)
-                                  Positioned(
-                                    left: 0,
-                                    right: 0,
-                                    bottom: 14,
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: List.generate(
-                                        images.length,
-                                        (index) => AnimatedContainer(
-                                          duration: const Duration(
-                                            milliseconds: 220,
-                                          ),
-                                          margin: const EdgeInsets.symmetric(
-                                            horizontal: 4,
-                                          ),
-                                          width: _currentImage == index
-                                              ? 18
-                                              : 8,
-                                          height: 8,
-                                          decoration: BoxDecoration(
-                                            color: _currentImage == index
-                                                ? Colors.black87
-                                                : Colors.black26,
-                                            borderRadius: BorderRadius.circular(
-                                              99,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
+                          _ImageGallery(
+                            images: images,
+                            pageController: _pageController,
+                            currentImage: _currentImage,
+                            onPageChanged: (index) {
+                              setState(() {
+                                _currentImage = index;
+                              });
+                            },
+                            onImageTap: (index) {
+                              _openImageViewer(imageUrls.cast<String>(), index);
+                            },
                           ),
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
@@ -385,19 +302,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                   ?.copyWith(fontWeight: FontWeight.w700),
                             ),
                           ),
-                          if ((product.description ?? '')
-                              .trim()
-                              .isNotEmpty) ...[
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
-                              child: Text(
-                                'Описание',
-                                style: Theme.of(context).textTheme.titleLarge
-                                    ?.copyWith(fontWeight: FontWeight.w700),
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                          if ((product.description ?? '').trim().isNotEmpty)
+                            _InfoCard(
+                              title: 'Описание',
                               child: Text(
                                 product.description!,
                                 style: Theme.of(context).textTheme.bodyMedium
@@ -407,17 +314,11 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                     ),
                               ),
                             ),
-                          ],
-
-                          // ВРЕМЕННЫЙ DEBUG-БЛОК.
-                          // Когда убедишься, что кнопка появилась, можешь удалить Text DEBUG,
-                          // но сам if (_canReview) с кнопкой оставь.
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                const SizedBox(height: 8),
                                 if (_canReview)
                                   FilledButton.icon(
                                     onPressed: _openAddReviewScreen,
@@ -429,7 +330,6 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                               ],
                             ),
                           ),
-
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                             child: Text(
@@ -595,6 +495,124 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+class _ImageGallery extends StatelessWidget {
+  const _ImageGallery({
+    required this.images,
+    required this.pageController,
+    required this.currentImage,
+    required this.onPageChanged,
+    required this.onImageTap,
+  });
+
+  final List images;
+  final PageController pageController;
+  final int currentImage;
+  final ValueChanged<int> onPageChanged;
+  final ValueChanged<int> onImageTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      height: 360,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceSecondary,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (images.isEmpty)
+            const Center(
+              child: Icon(
+                Icons.image_outlined,
+                size: 64,
+                color: Colors.black38,
+              ),
+            )
+          else
+            PageView.builder(
+              controller: pageController,
+              itemCount: images.length,
+              onPageChanged: onPageChanged,
+              itemBuilder: (context, index) {
+                return GestureDetector(
+                  onTap: () => onImageTap(index),
+                  child: Image.network(
+                    images[index].imageUrl,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    errorBuilder: (_, __, ___) => const Center(
+                      child: Icon(Icons.broken_image_outlined, size: 56),
+                    ),
+                  ),
+                );
+              },
+            ),
+          if (images.length > 1)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 14,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  images.length,
+                  (index) => AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: currentImage == index ? 18 : 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: currentImage == index
+                          ? Colors.black87
+                          : Colors.black26,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoCard extends StatelessWidget {
+  const _InfoCard({required this.title, required this.child});
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 10),
+          child,
+        ],
+      ),
     );
   }
 }

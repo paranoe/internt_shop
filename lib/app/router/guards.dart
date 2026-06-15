@@ -2,6 +2,18 @@ import 'package:diplomeprojectmobile/app/router/routes.dart';
 import 'package:diplomeprojectmobile/features/auth/presentation/controllers/auth_state.dart';
 
 class RouteGuards {
+  static bool _isAuthPage(String location) {
+    return location == AppRoutes.login ||
+        location == AppRoutes.register ||
+        location == AppRoutes.verifyEmail ||
+        location == AppRoutes.forgotPassword ||
+        location == AppRoutes.resetPassword;
+  }
+
+  static bool _isAdminOrSellerRoute(String location) {
+    return location.startsWith('/admin') || location.startsWith('/seller');
+  }
+
   static String homeByRole(String? role) {
     switch (role?.toLowerCase()) {
       case 'admin':
@@ -19,13 +31,6 @@ class RouteGuards {
     required String location,
     required String? role,
   }) {
-    final isAuthPage =
-        location == AppRoutes.login ||
-        location == AppRoutes.register ||
-        location == AppRoutes.verifyEmail ||
-        location == AppRoutes.forgotPassword ||
-        location == AppRoutes.resetPassword;
-
     final isSplash = location == AppRoutes.splash;
 
     if (status == AuthStatus.initial || status == AuthStatus.loading) {
@@ -33,17 +38,34 @@ class RouteGuards {
     }
 
     if (status == AuthStatus.unauthenticated || status == AuthStatus.error) {
-      if (isAuthPage) return null;
-      return AppRoutes.login;
-    }
-
-    if (status == AuthStatus.authenticated) {
-      if (isSplash || isAuthPage) {
-        return homeByRole(role);
+      // Когда гость открывает приложение — ведём не на login, а в каталог
+      if (isSplash) {
+        return AppRoutes.buyerHome;
       }
+
+      // Login/register должны открываться, когда пользователь сам нажал "Войти"
+      if (_isAuthPage(location)) {
+        return null;
+      }
+
+      // Admin/seller без входа нельзя
+      if (_isAdminOrSellerRoute(location)) {
+        return AppRoutes.login;
+      }
+
+      // Buyer-экраны разрешаем гостю.
+      // Недоступные экраны покажут AuthRequired внутри UI.
       return null;
     }
 
-    return AppRoutes.login;
+    if (status == AuthStatus.authenticated) {
+      if (isSplash || _isAuthPage(location)) {
+        return homeByRole(role);
+      }
+
+      return null;
+    }
+
+    return AppRoutes.buyerHome;
   }
 }

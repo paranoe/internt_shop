@@ -3,14 +3,12 @@ import 'package:diplomeprojectmobile/features/profile/domain/entities/profile.da
 import 'package:diplomeprojectmobile/features/profile/domain/repos/profile_repo.dart';
 
 class ProfileRepoImpl implements ProfileRepo {
-  ProfileRepoImpl(this._profileApi);
+  const ProfileRepoImpl(this._api);
 
-  final ProfileApi _profileApi;
+  final ProfileApi _api;
 
   @override
-  Future<ProfileEntity> getProfile() async {
-    return _profileApi.getProfile();
-  }
+  Future<ProfileEntity> getProfile() => _api.getProfile();
 
   @override
   Future<ProfileEntity> updateProfile({
@@ -19,8 +17,8 @@ class ProfileRepoImpl implements ProfileRepo {
     String? patronymic,
     String? phone,
     String? gender,
-  }) async {
-    return _profileApi.updateProfile(
+  }) {
+    return _api.updateProfile(
       firstName: firstName,
       lastName: lastName,
       patronymic: patronymic,
